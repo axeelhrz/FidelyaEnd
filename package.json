@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@date-io/date-fns": "^3.2.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^5.1.1",
     "@mui/icons-material": "^7.2.0",
+    "@mui/x-date-pickers": "^8.7.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "clsx": "^2.1.1",
