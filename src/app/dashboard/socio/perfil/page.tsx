@@ -10,7 +10,6 @@ import {
   Calendar, 
   Edit3,
   Shield,
-  QrCode,
   Award,
   TrendingUp,
   Gift,
@@ -198,7 +197,6 @@ export default function SocioPerfilPage() {
 
   // Modal states
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
   // UI states
@@ -435,14 +433,6 @@ export default function SocioPerfilPage() {
                   {/* Action Buttons */}
                   <div className="flex space-x-3 mt-4 sm:mt-0">
                     <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<QrCode size={16} />}
-                      onClick={() => setQrModalOpen(true)}
-                    >
-                      Mi QR
-                    </Button>
-                    <Button
                       size="sm"
                       leftIcon={<Edit3 size={16} />}
                       onClick={() => setEditModalOpen(true)}
@@ -678,45 +668,6 @@ export default function SocioPerfilPage() {
                 leftIcon={<Save size={16} />}
               >
                 Guardar Cambios
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* QR Modal */}
-        <Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-3">
-                <QrCode size={20} />
-                Mi Código QR
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="text-center py-6">
-              <div className="w-48 h-48 mx-auto bg-gray-100 rounded-xl flex items-center justify-center mb-4">
-                <QrCode size={64} className="text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {profileData.nombre}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Socio #{profileData.numeroSocio}
-              </p>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm text-gray-700">
-                  Muestra este código QR en comercios para validar tus beneficios
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => setQrModalOpen(false)}
-                className="w-full"
-              >
-                Cerrar
               </Button>
             </DialogFooter>
           </DialogContent>

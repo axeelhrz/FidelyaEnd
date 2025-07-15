@@ -13,15 +13,18 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  X,
   Settings,
   User,
-  DollarSign
+  DollarSign,
+  Trash2,
+  Unlink
 } from 'lucide-react';
 import { useSocios } from '@/hooks/useSocios';
 import { useSocioAsociacion } from '@/hooks/useSocioAsociacion';
 import { SocioDialog } from './SocioDialog';
 import { AddRegisteredSocioButton } from './AddRegisteredSocioButton';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { UnlinkConfirmDialog } from './UnlinkConfirmDialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
@@ -38,6 +41,7 @@ export const EnhancedMemberManagement = () => {
     loadSocios,
     createSocio,
     updateSocio,
+    deleteSocio,
     importSocios
   } = useSocios();
 
@@ -58,6 +62,16 @@ export const EnhancedMemberManagement = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSocio, setSelectedSocio] = useState<Socio | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Estados para el diálogo de eliminación
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [socioToDelete, setSocioToDelete] = useState<Socio | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Estados para el diálogo de desvinculación
+  const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
+  const [socioToUnlink, setSocioToUnlink] = useState<Socio | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -120,20 +134,66 @@ export const EnhancedMemberManagement = () => {
     }
   };
 
-  // Función para eliminar socio
+  // Función para abrir el diálogo de eliminación
+  const handleDeleteClick = (socio: Socio) => {
+    setSocioToDelete(socio);
+    setDeleteDialogOpen(true);
+  };
 
+  // Función para confirmar eliminación
+  const handleDeleteConfirm = async () => {
+    if (!socioToDelete) return;
 
-  // Función para desvincular socio
-  const handleDesvincularSocio = async (socioId: string) => {
-    if (!confirm('¿Estás seguro de que deseas desvincular este socio?')) return;
-
+    setDeleting(true);
     try {
-      await desvincularSocio(socioId);
+      const success = await deleteSocio(socioToDelete.id);
+      if (success) {
+        toast.success('Socio eliminado exitosamente');
+        setDeleteDialogOpen(false);
+        setSocioToDelete(null);
+        await handleRefresh();
+      }
+    } catch {
+      toast.error('Error al eliminar el socio');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Función para cancelar eliminación
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setSocioToDelete(null);
+  };
+
+  // Función para abrir el diálogo de desvinculación
+  const handleUnlinkClick = (socio: Socio) => {
+    setSocioToUnlink(socio);
+    setUnlinkDialogOpen(true);
+  };
+
+  // Función para confirmar desvinculación
+  const handleUnlinkConfirm = async () => {
+    if (!socioToUnlink) return;
+
+    setUnlinking(true);
+    try {
+      await desvincularSocio(socioToUnlink.id);
       toast.success('Socio desvinculado exitosamente');
+      setUnlinkDialogOpen(false);
+      setSocioToUnlink(null);
       await handleRefresh();
     } catch {
       toast.error('Error al desvincular el socio');
+    } finally {
+      setUnlinking(false);
     }
+  };
+
+  // Función para cancelar desvinculación
+  const handleUnlinkCancel = () => {
+    setUnlinkDialogOpen(false);
+    setSocioToUnlink(null);
   };
 
   // Función para exportar datos a CSV
@@ -672,11 +732,18 @@ export const EnhancedMemberManagement = () => {
                           <Settings className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => handleDesvincularSocio(socio.id)}
+                          onClick={() => handleDeleteClick(socio)}
                           className="text-red-600 hover:text-red-900"
+                          title="Eliminar socio"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleUnlinkClick(socio)}
+                          className="text-orange-600 hover:text-orange-900"
                           title="Desvincular socio"
                         >
-                          <X className="w-5 h-5" />
+                          <Unlink className="w-5 h-5" />
                         </button>
                       </div>
                     </td>
@@ -694,6 +761,30 @@ export const EnhancedMemberManagement = () => {
         onClose={() => setDialogOpen(false)}
         onSave={handleSaveSocio}
         socio={selectedSocio}
+      />
+
+      {/* Diálogo de Confirmación de Eliminación */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Eliminar Socio"
+        message={`¿Estás seguro de que deseas eliminar al socio "${socioToDelete?.nombre}"? Esta acción eliminará permanentemente todos los datos del socio, incluyendo su historial de beneficios y validaciones.`}
+        confirmText="Eliminar Socio"
+        cancelText="Cancelar"
+        loading={deleting}
+      />
+
+      {/* Diálogo de Confirmación de Desvinculación */}
+      <UnlinkConfirmDialog
+        open={unlinkDialogOpen}
+        onClose={handleUnlinkCancel}
+        onConfirm={handleUnlinkConfirm}
+        title="Desvincular Socio"
+        message={`¿Estás seguro de que deseas desvincular al socio "${socioToUnlink?.nombre}" de esta asociación? El socio mantendrá su cuenta pero perderá acceso a los beneficios de esta asociación.`}
+        confirmText="Desvincular"
+        cancelText="Cancelar"
+        loading={unlinking}
       />
     </div>
   );

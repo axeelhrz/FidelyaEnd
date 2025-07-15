@@ -12,6 +12,8 @@ import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/lib/constants';
 import { handleError } from '@/lib/error-handler';
 import { qrStatsService } from './qr-stats.service';
+import { ClienteService } from './cliente.service';
+import { ClienteAutoData } from '@/types/cliente';
 
 export interface QRValidationRequest {
   qrData: string;
@@ -54,6 +56,11 @@ export interface QRValidationResponse {
       id: string;
       fechaValidacion: Date;
       codigoValidacion: string;
+    };
+    cliente?: {
+      id: string;
+      esNuevo: boolean;
+      datosCompletos: boolean;
     };
   };
   error?: string;
@@ -233,13 +240,51 @@ class QRValidationService {
             fechaValidacion: new Date(),
             codigoValidacion: validacionData.codigoValidacion,
           },
+          socioData: socioData, // Datos completos del socio para crear cliente
+          asociacionId: socioAsociacionId,
         };
       });
+
+      // 5. Create or update cliente automatically (outside transaction to avoid conflicts)
+      let clienteInfo = null;
+      try {
+        const clienteAutoData: ClienteAutoData = {
+          socioId: request.socioId,
+          socioNombre: result.socioData.nombre,
+          socioEmail: result.socioData.email,
+          asociacionId: result.asociacionId,
+          comercioId: comercioId,
+        };
+
+        const clienteId = await ClienteService.createOrUpdateClienteFromValidation(
+          clienteAutoData,
+          result.validacionId
+        );
+
+        // Get cliente info to determine if it's new and if data is complete
+        const cliente = await ClienteService.getClienteById(clienteId);
+        if (cliente) {
+          clienteInfo = {
+            id: clienteId,
+            esNuevo: cliente.totalValidaciones === 1, // Es nuevo si es su primera validación
+            datosCompletos: cliente.datosCompletos,
+          };
+        }
+      } catch (error) {
+        console.error('Error creating/updating cliente:', error);
+        // No fallar la validación por error en cliente, solo log
+      }
 
       return {
         success: true,
         message: 'Validación exitosa. Beneficios disponibles.',
-        data: result,
+        data: {
+          comercio: result.comercio,
+          beneficios: result.beneficios,
+          socio: result.socio,
+          validacion: result.validacion,
+          cliente: clienteInfo ?? undefined,
+        },
       };
 
     } catch (error) {
@@ -289,6 +334,7 @@ class QRValidationService {
           throw new Error('Validación no encontrada');
         }
 
+        const validacionData = validacionDoc.data();
 
         // Get benefit
         const beneficioRef = doc(db, this.beneficiosCollection, beneficioId);
@@ -343,13 +389,40 @@ class QRValidationService {
           montoDescuento,
           montoFinal,
           codigoUso,
+          validacionData,
+          beneficioData,
         };
       });
+
+      // Update cliente statistics if benefit was used with a purchase
+      if (montoOriginal && montoOriginal > 0) {
+        try {
+          // Find cliente by socioId and comercioId
+          const clientesQuery = query(
+            collection(db, 'clientes'),
+            where('socioId', '==', result.validacionData.socioId),
+            where('comercioId', '==', result.validacionData.comercioId)
+          );
+          
+          const clientesSnapshot = await getDocs(clientesQuery);
+          if (!clientesSnapshot.empty) {
+            const clienteId = clientesSnapshot.docs[0].id;
+            await ClienteService.updateClienteCompra(clienteId, montoOriginal, true);
+          }
+        } catch (error) {
+          console.error('Error updating cliente compra:', error);
+          // No fallar el uso del beneficio por error en cliente
+        }
+      }
 
       return {
         success: true,
         message: 'Beneficio aplicado exitosamente',
-        data: result,
+        data: {
+          montoDescuento: result.montoDescuento,
+          montoFinal: result.montoFinal,
+          codigoUso: result.codigoUso,
+        },
       };
 
     } catch (error) {
@@ -401,6 +474,69 @@ class QRValidationService {
     } catch (error) {
       handleError(error, 'Get Validation History');
       return [];
+    }
+  }
+
+  /**
+   * Get validation statistics for a comercio
+   */
+  async getValidationStatsForComercio(comercioId: string): Promise<{
+    totalValidaciones: number;
+    validacionesHoy: number;
+    validacionesMes: number;
+    clientesUnicos: number;
+    beneficiosUsados: number;
+  }> {
+    try {
+      const validacionesQuery = query(
+        collection(db, this.validacionesCollection),
+        where('comercioId', '==', comercioId),
+        where('resultado', '==', 'valido')
+      );
+
+      const snapshot = await getDocs(validacionesQuery);
+      const validaciones = snapshot.docs.map(doc => doc.data());
+
+      const totalValidaciones = validaciones.length;
+      
+      // Validaciones hoy
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const validacionesHoy = validaciones.filter(v => {
+        const fechaValidacion = v.fechaValidacion?.toDate();
+        return fechaValidacion && fechaValidacion >= hoy;
+      }).length;
+
+      // Validaciones este mes
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      const validacionesMes = validaciones.filter(v => {
+        const fechaValidacion = v.fechaValidacion?.toDate();
+        return fechaValidacion && fechaValidacion >= inicioMes;
+      }).length;
+
+      // Clientes únicos
+      const sociosUnicos = new Set(validaciones.map(v => v.socioId));
+      const clientesUnicos = sociosUnicos.size;
+
+      // Beneficios usados
+      const beneficiosUsados = validaciones.filter(v => v.beneficioUsado).length;
+
+      return {
+        totalValidaciones,
+        validacionesHoy,
+        validacionesMes,
+        clientesUnicos,
+        beneficiosUsados,
+      };
+    } catch (error) {
+      handleError(error, 'Get Validation Stats');
+      return {
+        totalValidaciones: 0,
+        validacionesHoy: 0,
+        validacionesMes: 0,
+        clientesUnicos: 0,
+        beneficiosUsados: 0,
+      };
     }
   }
 

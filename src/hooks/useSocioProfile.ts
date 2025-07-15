@@ -5,8 +5,10 @@ import { validacionesService, HistorialValidacion } from '@/services/validacione
 import { socioService } from '@/services/socio.service';
 import { Socio, UpdateSocioProfileData } from '@/types/socio';
 import { useAuth } from './useAuth';
+import { useRealtimeSocioData } from './useRealtimeSocioData';
 import { toast } from 'react-hot-toast';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import type { ActivityLog } from './useRealtimeSocioData';
 
 interface UseSocioProfileReturn {
   socio: Socio | null;
@@ -41,6 +43,21 @@ interface UseSocioProfileReturn {
     totalAhorro: number;    
   };
   updating: boolean;
+  // Real-time data
+  realtimeData: {
+    validaciones: HistorialValidacion[];
+    stats: {
+      totalValidaciones: number;
+      ahorroTotal: number;
+      beneficiosMasUsados: Array<{ titulo: string; usos: number }>;
+      comerciosFavoritos: Array<{ nombre: string; visitas: number }>;
+      validacionesPorMes: Array<{ mes: string; validaciones: number; ahorro: number }>;
+    };
+    activities: HistorialValidacion[];
+    connectionState: string;
+    hasNewActivity: boolean;
+    markActivityAsRead: () => void;
+  };
 }
 
 export function useSocioProfile(): UseSocioProfileReturn {
@@ -66,7 +83,17 @@ export function useSocioProfile(): UseSocioProfileReturn {
   const [lastValidacionDoc, setLastValidacionDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMoreValidaciones, setHasMoreValidaciones] = useState<boolean>(false);
 
+  // Get real-time data
+  const realtimeData = useRealtimeSocioData();
+
   const socioId = user?.uid || '';
+
+  // Update estadisticas when real-time data changes
+  useEffect(() => {
+    if (realtimeData.stats && !realtimeData.loading) {
+      setEstadisticas(realtimeData.stats);
+    }
+  }, [realtimeData.stats, realtimeData.loading]);
 
   // Load socio profile
   const loadSocioProfile = useCallback(async () => {
@@ -91,7 +118,7 @@ export function useSocioProfile(): UseSocioProfileReturn {
     }
   }, [socioId]);
 
-  // Load historial validaciones
+  // Load historial validaciones (for pagination)
   const loadHistorialValidaciones = useCallback(async () => {
     if (!socioId) return;
 
@@ -113,7 +140,7 @@ export function useSocioProfile(): UseSocioProfileReturn {
     }
   }, [socioId]);
 
-  // Load more validaciones
+  // Load more validaciones (for pagination)
   const loadMoreValidaciones = useCallback(async () => {
     if (!socioId || !hasMoreValidaciones || loading) return;
 
@@ -138,9 +165,9 @@ export function useSocioProfile(): UseSocioProfileReturn {
     }
   }, [socioId, hasMoreValidaciones, loading, lastValidacionDoc]);
 
-  // Load estadisticas
+  // Load estadisticas (fallback for when real-time fails)
   const loadEstadisticas = useCallback(async () => {
-    if (!socioId) return;
+    if (!socioId || !realtimeData.error) return; // Only load if real-time has error
 
     try {
       const stats = await validacionesService.getEstadisticasSocio(socioId);
@@ -148,7 +175,7 @@ export function useSocioProfile(): UseSocioProfileReturn {
     } catch (error) {
       console.error('Error loading estadisticas:', error);
     }
-  }, [socioId]);
+  }, [socioId, realtimeData.error]);
 
   const updateProfile = useCallback(async (data: UpdateSocioProfileData): Promise<boolean> => {
     if (!socioId) return false;
@@ -194,7 +221,8 @@ export function useSocioProfile(): UseSocioProfileReturn {
       loadHistorialValidaciones(),
       loadEstadisticas(),
     ]);
-  }, [loadSocioProfile, loadHistorialValidaciones, loadEstadisticas]);
+    realtimeData.refreshData();
+  }, [loadSocioProfile, loadHistorialValidaciones, loadEstadisticas, realtimeData]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -204,15 +232,17 @@ export function useSocioProfile(): UseSocioProfileReturn {
   // Load initial data
   useEffect(() => {
     if (socioId) {
-      refreshData();
+      loadSocioProfile();
+      loadHistorialValidaciones();
     }
-  }, [socioId, refreshData]);
+  }, [socioId, loadSocioProfile, loadHistorialValidaciones]);
+
   return {
     socio,
     historialValidaciones,
     estadisticas,
-    loading,
-    error,
+    loading: loading || realtimeData.loading,
+    error: error || realtimeData.error,
     hasMoreValidaciones,
     loadSocioProfile,
     loadHistorialValidaciones,
@@ -227,5 +257,41 @@ export function useSocioProfile(): UseSocioProfileReturn {
       totalAhorro: estadisticas.ahorroTotal,
     },
     updating,
+    realtimeData: {
+      validaciones: realtimeData.validaciones.map(v => ({
+        ...v,
+        fechaValidacion: v.fechaValidacion instanceof Date
+          ? v.fechaValidacion
+          : v.fechaValidacion.toDate(),
+      })),
+      stats: realtimeData.stats,
+      activities: realtimeData.activities.map((activity: ActivityLog) => ({
+        id: activity.id,
+        comercioId: activity.metadata?.comercioId as string ?? '',
+        comercioNombre: activity.metadata?.comercioNombre as string ?? '',
+        beneficioId: activity.metadata?.beneficioId as string ?? '',
+        beneficioTitulo: activity.title ?? '',
+        beneficioDescripcion: activity.description ?? '',
+        descuento: activity.metadata?.descuento as number ?? 0,
+        tipoDescuento: 'porcentaje',
+        fechaValidacion: activity.timestamp instanceof Date
+          ? activity.timestamp
+          : typeof (activity.timestamp as { toDate?: () => Date })?.toDate === 'function'
+            ? (activity.timestamp as { toDate: () => Date }).toDate()
+            : new Date(),
+        montoDescuento: activity.metadata?.montoDescuento as number ?? 0,
+        estado: 'exitosa' as const,
+        codigoValidacion: activity.id,
+        ahorro: activity.metadata?.montoDescuento as number ?? 0,
+        socioId: user?.uid ?? '',
+        socioNombre: user?.nombre ?? '',
+        validacionId: activity.id,
+        metodoPago: undefined,
+        notas: undefined,
+      } as HistorialValidacion)),
+      connectionState: String(realtimeData.connectionState),
+      hasNewActivity: realtimeData.hasNewActivity,
+      markActivityAsRead: realtimeData.markActivityAsRead
+    }
   };
 }

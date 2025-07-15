@@ -14,7 +14,6 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import { COLLECTIONS } from '@/lib/constants';
 import { handleFirebaseError } from '@/lib/firebase-errors';
 import {
   Cliente,
@@ -24,12 +23,168 @@ import {
   ClienteFilter,
   ClienteSegment,
   ClienteExport,
+  ClienteAutoData,
 } from '@/types/cliente';
 
 export class ClienteService {
-  private static readonly COLLECTION = COLLECTIONS.SOCIOS; // Reutilizamos la colección de socios
+  private static readonly COLLECTION = 'clientes'; // Colección específica para clientes
   private static readonly ACTIVITIES_COLLECTION = 'cliente_activities';
   private static readonly SEGMENTS_COLLECTION = 'cliente_segments';
+
+  /**
+   * Crea o actualiza un cliente automáticamente desde validación QR
+   */
+  static async createOrUpdateClienteFromValidation(
+    clienteData: ClienteAutoData,
+    validacionId: string
+  ): Promise<string> {
+    try {
+      // Buscar si ya existe un cliente para este socio en este comercio
+      const clientesRef = collection(db, this.COLLECTION);
+      const existingClienteQuery = query(
+        clientesRef,
+        where('socioId', '==', clienteData.socioId),
+        where('comercioId', '==', clienteData.comercioId)
+      );
+      
+      const existingClienteSnapshot = await getDocs(existingClienteQuery);
+      const now = Timestamp.now();
+
+      if (!existingClienteSnapshot.empty) {
+        // Cliente existe, actualizar estadísticas de visita
+        const clienteDoc = existingClienteSnapshot.docs[0];
+        const clienteId = clienteDoc.id;
+        const cliente = clienteDoc.data() as Cliente;
+
+        await updateDoc(doc(db, this.COLLECTION, clienteId), {
+          totalValidaciones: cliente.totalValidaciones + 1,
+          fechaUltimaVisita: now,
+          ultimoAcceso: now,
+          actualizadoEn: now,
+        });
+
+        // Registrar actividad de validación QR
+        await this.logActivity(clienteId, {
+          tipo: 'validacion_qr',
+          descripcion: 'Validación QR realizada en el comercio',
+          validacionId,
+          fecha: now,
+        });
+
+        return clienteId;
+      } else {
+        // Cliente no existe, crear nuevo
+        const nuevoCliente: Omit<Cliente, 'id'> = {
+          nombre: clienteData.socioNombre,
+          email: clienteData.socioEmail || `${clienteData.socioId}@temp.com`,
+          socioId: clienteData.socioId,
+          comercioId: clienteData.comercioId,
+          asociacionId: clienteData.asociacionId,
+          estado: 'activo',
+          creadoEn: now,
+          actualizadoEn: now,
+          ultimoAcceso: now,
+          
+          // Información sobre creación automática
+          creadoAutomaticamente: true,
+          datosCompletos: false,
+          fechaPrimeraVisita: now,
+          fechaUltimaVisita: now,
+          
+          // Estadísticas iniciales
+          totalCompras: 0,
+          montoTotalGastado: 0,
+          beneficiosUsados: 0,
+          ahorroTotal: 0,
+          frecuenciaVisitas: 1,
+          totalValidaciones: 1,
+          promedioCompra: 0,
+          categoriasFavoritas: [],
+          
+          // Configuración por defecto
+          configuracion: {
+            recibirNotificaciones: true,
+            recibirPromociones: true,
+            recibirEmail: true,
+            recibirSMS: false,
+          },
+        };
+
+        const clienteRef = await addDoc(collection(db, this.COLLECTION), nuevoCliente);
+
+        // Registrar actividades
+        await this.logActivity(clienteRef.id, {
+          tipo: 'registro',
+          descripcion: 'Cliente creado automáticamente por validación QR',
+          fecha: now,
+        });
+
+        await this.logActivity(clienteRef.id, {
+          tipo: 'validacion_qr',
+          descripcion: 'Primera validación QR realizada',
+          validacionId,
+          fecha: now,
+        });
+
+        return clienteRef.id;
+      }
+    } catch (error) {
+      console.error('Error creating/updating cliente from validation:', error);
+      throw new Error(handleFirebaseError(error));
+    }
+  }
+
+  /**
+   * Completa los datos de un cliente creado automáticamente
+   */
+  static async completarDatosCliente(
+    clienteId: string,
+    datosCompletos: Partial<ClienteFormData>
+  ): Promise<void> {
+    try {
+      const clienteRef = doc(db, this.COLLECTION, clienteId);
+      const clienteSnap = await getDoc(clienteRef);
+
+      if (!clienteSnap.exists()) {
+        throw new Error('Cliente no encontrado');
+      }
+
+      const cliente = clienteSnap.data() as Cliente;
+
+      // Validar que el cliente fue creado automáticamente
+      if (!cliente.creadoAutomaticamente) {
+        throw new Error('Este cliente no fue creado automáticamente');
+      }
+
+      const { fechaNacimiento, ...restDatos } = datosCompletos;
+      
+      const updateData: Partial<Cliente> = {
+        ...restDatos,
+        datosCompletos: true,
+        actualizadoEn: Timestamp.now(),
+        ...(fechaNacimiento
+          ? { fechaNacimiento: Timestamp.fromDate(new Date(fechaNacimiento)) }
+          : {}),
+      };
+
+      // Si se proporciona email válido, actualizar
+      if (datosCompletos.email && !datosCompletos.email.includes('@temp.com')) {
+        updateData.email = datosCompletos.email;
+      }
+
+      await updateDoc(clienteRef, updateData);
+
+      // Registrar actividad
+      await this.logActivity(clienteId, {
+        tipo: 'actualizacion',
+        descripcion: 'Datos del cliente completados por el comercio',
+        fecha: Timestamp.now(),
+      });
+    } catch (error) {
+      console.error('Error completing cliente data:', error);
+      throw new Error(handleFirebaseError(error));
+    }
+  }
 
   /**
    * Obtiene todos los clientes de un comercio
@@ -45,6 +200,14 @@ export class ClienteService {
       // Aplicar filtros
       if (filtros.estado) {
         q = query(q, where('estado', '==', filtros.estado));
+      }
+
+      if (filtros.datosCompletos !== undefined) {
+        q = query(q, where('datosCompletos', '==', filtros.datosCompletos));
+      }
+
+      if (filtros.creadoAutomaticamente !== undefined) {
+        q = query(q, where('creadoAutomaticamente', '==', filtros.creadoAutomaticamente));
       }
 
       if (filtros.fechaDesde) {
@@ -64,18 +227,13 @@ export class ClienteService {
       const limite = filtros.limite || 20;
       q = query(q, limit(limite));
 
-      if (filtros.offset) {
-        // Para paginación real, necesitarías el último documento
-        // Aquí simplificamos usando offset
-      }
-
       const snapshot = await getDocs(q);
       const clientes = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       })) as Cliente[];
 
-      // Filtros adicionales en memoria (para campos que no están indexados)
+      // Filtros adicionales en memoria
       let clientesFiltrados = clientes;
 
       if (filtros.busqueda) {
@@ -140,7 +298,7 @@ export class ClienteService {
   }
 
   /**
-   * Crea un nuevo cliente
+   * Crea un nuevo cliente manualmente
    */
   static async createCliente(
     comercioId: string,
@@ -158,11 +316,18 @@ export class ClienteService {
         comercioId,
         creadoEn: now,
         actualizadoEn: now,
+        
+        // Información sobre creación manual
+        creadoAutomaticamente: false,
+        datosCompletos: true,
+        
+        // Estadísticas iniciales
         totalCompras: 0,
         montoTotalGastado: 0,
         beneficiosUsados: 0,
         ahorroTotal: 0,
         frecuenciaVisitas: 0,
+        totalValidaciones: 0,
         categoriasFavoritas: [],
         promedioCompra: 0,
         tags: clienteData.tags || [],
@@ -173,7 +338,7 @@ export class ClienteService {
       // Registrar actividad
       await this.logActivity(clienteRef.id, {
         tipo: 'registro',
-        descripcion: 'Cliente registrado en el sistema',
+        descripcion: 'Cliente registrado manualmente por el comercio',
         fecha: now,
       });
 
@@ -195,14 +360,34 @@ export class ClienteService {
       const clienteRef = doc(db, this.COLLECTION, clienteId);
       
       const { fechaNacimiento, ...restClienteData } = clienteData;
-      // Remove fechaNacimiento from restClienteData to avoid type conflict
-      const updateData: Omit<Partial<ClienteFormData>, 'fechaNacimiento'> & { actualizadoEn: Timestamp; fechaNacimiento?: Timestamp } = {
+      const updateData: Omit<Partial<ClienteFormData>, 'fechaNacimiento'> & { 
+        actualizadoEn: Timestamp; 
+        fechaNacimiento?: Timestamp;
+        datosCompletos?: boolean;
+      } = {
         ...restClienteData,
         actualizadoEn: Timestamp.now(),
         ...(fechaNacimiento
           ? { fechaNacimiento: Timestamp.fromDate(new Date(fechaNacimiento)) }
           : {}),
       };
+
+      // Si el cliente fue creado automáticamente y se están actualizando datos importantes,
+      // marcar como datos completos
+      const clienteSnap = await getDoc(clienteRef);
+      if (clienteSnap.exists()) {
+        const cliente = clienteSnap.data() as Cliente;
+        if (cliente.creadoAutomaticamente && !cliente.datosCompletos) {
+          // Verificar si se están proporcionando datos suficientes
+          const datosImportantes = ['telefono', 'direccion', 'fechaNacimiento'].some(
+            campo => clienteData[campo as keyof ClienteFormData]
+          );
+          
+          if (datosImportantes) {
+            updateData.datosCompletos = true;
+          }
+        }
+      }
 
       await updateDoc(clienteRef, updateData);
 
@@ -312,6 +497,10 @@ export class ClienteService {
       const totalClientes = clientes.length;
       const clientesActivos = clientes.filter(c => c.estado === 'activo').length;
       const clientesInactivos = clientes.filter(c => c.estado === 'inactivo').length;
+      const clientesPendientesCompletar = clientes.filter(c => 
+        c.creadoAutomaticamente && !c.datosCompletos
+      ).length;
+      const clientesCompletados = clientes.filter(c => c.datosCompletos).length;
 
       // Clientes nuevos (últimos 30 días)
       const hace30Dias = new Date();
@@ -320,22 +509,23 @@ export class ClienteService {
         c.creadoEn.toDate() >= hace30Dias
       ).length;
 
-      // Estadísticas de compras
+      // Estadísticas de compras y validaciones
       const totalCompras = clientes.reduce((sum, c) => sum + c.totalCompras, 0);
       const montoTotal = clientes.reduce((sum, c) => sum + c.montoTotalGastado, 0);
+      const validacionesTotales = clientes.reduce((sum, c) => sum + (c.totalValidaciones || 0), 0);
       const promedioComprasPorCliente = totalClientes > 0 ? totalCompras / totalClientes : 0;
       const montoPromedioCompra = totalCompras > 0 ? montoTotal / totalCompras : 0;
 
-      // Clientes más activos (top 5)
+      // Clientes más activos (por validaciones QR)
       const clientesMasActivos = clientes
-        .sort((a, b) => b.totalCompras - a.totalCompras)
+        .sort((a, b) => (b.totalValidaciones || 0) - (a.totalValidaciones || 0))
         .slice(0, 5);
 
-      // Crecimiento mensual (simplificado)
+      // Crecimiento mensual
       const crecimientoMensual = clientesNuevos > 0 ? 
         ((clientesNuevos / Math.max(totalClientes - clientesNuevos, 1)) * 100) : 0;
 
-      // Retención de clientes (clientes activos vs total)
+      // Retención de clientes
       const retencionClientes = totalClientes > 0 ? 
         (clientesActivos / totalClientes) * 100 : 0;
 
@@ -347,12 +537,15 @@ export class ClienteService {
         clientesActivos,
         clientesNuevos,
         clientesInactivos,
+        clientesPendientesCompletar,
+        clientesCompletados,
         promedioComprasPorCliente,
         montoPromedioCompra,
         clientesMasActivos,
         crecimientoMensual,
         retencionClientes,
         valorVidaPromedio,
+        validacionesTotales,
       };
     } catch (error) {
       console.error('Error getting cliente stats:', error);
@@ -432,6 +625,7 @@ export class ClienteService {
         montoTotalGastado: nuevoMontoTotal,
         promedioCompra: nuevoPromedio,
         fechaUltimaCompra: Timestamp.now(),
+        ultimoAcceso: Timestamp.now(),
         actualizadoEn: Timestamp.now(),
       };
 
@@ -464,7 +658,7 @@ export class ClienteService {
       
       // Obtener actividades de todos los clientes (limitado)
       const actividades: ClienteActivity[] = [];
-      for (const cliente of clientes.slice(0, 10)) { // Limitar para evitar sobrecarga
+      for (const cliente of clientes.slice(0, 10)) {
         const clienteActivities = await this.getClienteActivities(cliente.id, 5);
         actividades.push(...clienteActivities);
       }
@@ -508,7 +702,6 @@ export class ClienteService {
    */
   static async getClientesBySegment(segmentId: string): Promise<Cliente[]> {
     try {
-      // Obtener configuración del segmento
       const segmentRef = doc(db, this.SEGMENTS_COLLECTION, segmentId);
       const segmentSnap = await getDoc(segmentRef);
 
@@ -517,8 +710,6 @@ export class ClienteService {
       }
 
       const segment = segmentSnap.data() as ClienteSegment;
-      
-      // Aplicar criterios del segmento
       const { clientes } = await this.getClientesByComercio('', segment.criterios);
       return clientes;
     } catch (error) {
@@ -539,6 +730,23 @@ export class ClienteService {
     } catch (error) {
       console.error('Error updating ultimo acceso:', error);
       // No lanzar error para no interrumpir el flujo
+    }
+  }
+
+  /**
+   * Obtiene clientes pendientes de completar datos
+   */
+  static async getClientesPendientesCompletar(comercioId: string): Promise<Cliente[]> {
+    try {
+      const { clientes } = await this.getClientesByComercio(comercioId, {
+        creadoAutomaticamente: true,
+        datosCompletos: false,
+        limite: 50,
+      });
+      return clientes;
+    } catch (error) {
+      console.error('Error getting clientes pendientes:', error);
+      throw new Error(handleFirebaseError(error));
     }
   }
 }

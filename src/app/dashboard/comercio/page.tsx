@@ -10,7 +10,6 @@ import { LogoutModal } from '@/components/ui/LogoutModal';
 import { ComercioOverviewDashboard } from '@/components/comercio/ComercioOverviewDashboard';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  QrCode, 
   BarChart3, 
   Plus,
   Store,
@@ -21,14 +20,6 @@ const QuickActions: React.FC<{
   onNavigate: (section: string) => void;
 }> = ({ onNavigate }) => {
   const quickActions = [
-    {
-      id: 'qr-validation',
-      label: 'Validar QR',
-      icon: <QrCode size={20} />,
-      color: 'bg-emerald-500 hover:bg-emerald-600',
-      onClick: () => onNavigate('validaciones'),
-      description: 'Escanear beneficios'
-    },
     {
       id: 'analytics',
       label: 'Analytics',
@@ -48,7 +39,7 @@ const QuickActions: React.FC<{
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
       {quickActions.map((action) => (
         <button
           key={action.id}
@@ -163,10 +154,6 @@ export default function ComercioDashboard() {
     }
   };
 
-  const handleQuickValidation = () => {
-    router.push('/dashboard/comercio/validaciones');
-  };
-
   // Loading state
   if (authLoading) {
     return (
@@ -207,16 +194,6 @@ export default function ComercioDashboard() {
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleQuickValidation}
-                  className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 flex items-center space-x-2 shadow-lg"
-                >
-                  <QrCode className="w-5 h-5" />
-                  <span>Validar Beneficio</span>
-                </button>
-              </div>
             </div>
           </div>
 
@@ -226,7 +203,6 @@ export default function ComercioDashboard() {
           {/* Main Dashboard */}
           <ComercioOverviewDashboard
             onNavigate={handleNavigate}
-            onQuickValidation={handleQuickValidation}
           />
         </div>
       </div>

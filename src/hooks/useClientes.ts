@@ -18,9 +18,11 @@ interface UseClientesReturn {
   clienteSeleccionado: Cliente | null;
   stats: ClienteStats | null;
   activities: ClienteActivity[];
+  clientesPendientes: Cliente[]; // Clientes pendientes de completar
   loading: boolean;
   loadingStats: boolean;
   loadingActivities: boolean;
+  loadingPendientes: boolean;
   error: string | null;
   hasMore: boolean;
   total: number;
@@ -28,9 +30,11 @@ interface UseClientesReturn {
   // Actions
   loadClientes: (filtros?: ClienteFilter) => Promise<void>;
   loadMoreClientes: () => Promise<void>;
+  loadClientesPendientes: () => Promise<void>;
   selectCliente: (clienteId: string) => Promise<void>;
   createCliente: (clienteData: ClienteFormData) => Promise<string | null>;
   updateCliente: (clienteId: string, clienteData: Partial<ClienteFormData>) => Promise<boolean>;
+  completarDatosCliente: (clienteId: string, datosCompletos: Partial<ClienteFormData>) => Promise<boolean>;
   deleteCliente: (clienteId: string) => Promise<boolean>;
   updateEstadoCliente: (clienteId: string, estado: 'activo' | 'inactivo' | 'suspendido') => Promise<boolean>;
   uploadClienteImage: (clienteId: string, file: File) => Promise<string | null>;
@@ -54,11 +58,13 @@ export const useClientes = (): UseClientesReturn => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [stats, setStats] = useState<ClienteStats | null>(null);
   const [activities, setActivities] = useState<ClienteActivity[]>([]);
+  const [clientesPendientes, setClientesPendientes] = useState<Cliente[]>([]);
   
   // Estados de carga
   const [loading, setLoading] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [loadingPendientes, setLoadingPendientes] = useState(false);
   
   // Estados de control
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +82,24 @@ export const useClientes = (): UseClientesReturn => {
   const comercioId = useMemo(() => {
     return user?.role === 'comercio' ? user.uid : null;
   }, [user]);
+
+  /**
+   * Refrescar estadísticas
+   */
+  const refreshStats = useCallback(async () => {
+    if (!comercioId) return;
+
+    try {
+      setLoadingStats(true);
+      const newStats = await ClienteService.getClienteStats(comercioId);
+      setStats(newStats);
+    } catch (error) {
+      console.error('Error refreshing stats:', error);
+      toast.error('Error al cargar estadísticas');
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [comercioId]);
 
   /**
    * Cargar clientes con filtros
@@ -128,6 +152,24 @@ export const useClientes = (): UseClientesReturn => {
       setLoading(false);
     }
   }, [comercioId, filtros, clientes.length, hasMore, loading]);
+
+  /**
+   * Cargar clientes pendientes de completar datos
+   */
+  const loadClientesPendientes = useCallback(async () => {
+    if (!comercioId) return;
+
+    try {
+      setLoadingPendientes(true);
+      const pendientes = await ClienteService.getClientesPendientesCompletar(comercioId);
+      setClientesPendientes(pendientes);
+    } catch (error) {
+      console.error('Error loading clientes pendientes:', error);
+      setClientesPendientes([]);
+    } finally {
+      setLoadingPendientes(false);
+    }
+  }, [comercioId]);
 
   /**
    * Cargar actividades del cliente
@@ -219,6 +261,11 @@ export const useClientes = (): UseClientesReturn => {
       // Recargar lista
       await loadClientes();
       
+      // Recargar pendientes si el cliente estaba en esa lista
+      if (clientesPendientes.some(c => c.id === clienteId)) {
+        await loadClientesPendientes();
+      }
+      
       return true;
     } catch (error) {
       console.error('Error updating cliente:', error);
@@ -228,7 +275,42 @@ export const useClientes = (): UseClientesReturn => {
     } finally {
       setLoading(false);
     }
-  }, [clienteSeleccionado, loadClientes]);
+  }, [clienteSeleccionado, loadClientes, clientesPendientes, loadClientesPendientes]);
+
+  /**
+   * Completar datos de cliente creado automáticamente
+   */
+  const completarDatosCliente = useCallback(async (
+    clienteId: string,
+    datosCompletos: Partial<ClienteFormData>
+  ): Promise<boolean> => {
+    try {
+      setLoading(true);
+      await ClienteService.completarDatosCliente(clienteId, datosCompletos);
+      
+      toast.success('Datos del cliente completados exitosamente');
+      
+      // Actualizar cliente seleccionado si es el mismo
+      if (clienteSeleccionado?.id === clienteId) {
+        const clienteActualizado = await ClienteService.getClienteById(clienteId);
+        setClienteSeleccionado(clienteActualizado);
+      }
+      
+      // Recargar listas
+      await loadClientes();
+      await loadClientesPendientes();
+      await refreshStats();
+      
+      return true;
+    } catch (error) {
+      console.error('Error completing cliente data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al completar datos del cliente';
+      toast.error(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [clienteSeleccionado, loadClientes, loadClientesPendientes, refreshStats]);
 
   /**
    * Eliminar cliente
@@ -245,8 +327,10 @@ export const useClientes = (): UseClientesReturn => {
         setClienteSeleccionado(null);
       }
       
-      // Recargar lista
+      // Recargar listas
       await loadClientes();
+      await loadClientesPendientes();
+      await refreshStats();
       
       return true;
     } catch (error) {
@@ -257,7 +341,7 @@ export const useClientes = (): UseClientesReturn => {
     } finally {
       setLoading(false);
     }
-  }, [clienteSeleccionado, loadClientes]);
+  }, [clienteSeleccionado, loadClientes, loadClientesPendientes, refreshStats]);
 
   /**
    * Actualizar estado del cliente
@@ -278,6 +362,11 @@ export const useClientes = (): UseClientesReturn => {
       
       // Actualizar en la lista
       setClientes(prev => prev.map(cliente => 
+        cliente.id === clienteId ? { ...cliente, estado } : cliente
+      ));
+      
+      // Actualizar en pendientes si está ahí
+      setClientesPendientes(prev => prev.map(cliente => 
         cliente.id === clienteId ? { ...cliente, estado } : cliente
       ));
       
@@ -306,6 +395,11 @@ export const useClientes = (): UseClientesReturn => {
       
       // Actualizar en la lista
       setClientes(prev => prev.map(cliente => 
+        cliente.id === clienteId ? { ...cliente, avatar: imageUrl } : cliente
+      ));
+      
+      // Actualizar en pendientes si está ahí
+      setClientesPendientes(prev => prev.map(cliente => 
         cliente.id === clienteId ? { ...cliente, avatar: imageUrl } : cliente
       ));
       
@@ -364,24 +458,6 @@ export const useClientes = (): UseClientesReturn => {
   }, [comercioId]);
 
   /**
-   * Refrescar estadísticas
-   */
-  const refreshStats = useCallback(async () => {
-    if (!comercioId) return;
-
-    try {
-      setLoadingStats(true);
-      const newStats = await ClienteService.getClienteStats(comercioId);
-      setStats(newStats);
-    } catch (error) {
-      console.error('Error refreshing stats:', error);
-      toast.error('Error al cargar estadísticas');
-    } finally {
-      setLoadingStats(false);
-    }
-  }, [comercioId]);
-
-  /**
    * Actualizar compra del cliente
    */
   const updateClienteCompra = useCallback(async (
@@ -427,8 +503,9 @@ export const useClientes = (): UseClientesReturn => {
     if (comercioId) {
       loadClientes();
       refreshStats();
+      loadClientesPendientes();
     }
-  }, [comercioId, loadClientes, refreshStats]);
+  }, [comercioId, loadClientes, refreshStats, loadClientesPendientes]);
 
   // Recargar cuando cambien los filtros
   useEffect(() => {
@@ -443,9 +520,11 @@ export const useClientes = (): UseClientesReturn => {
     clienteSeleccionado,
     stats,
     activities,
+    clientesPendientes,
     loading,
     loadingStats,
     loadingActivities,
+    loadingPendientes,
     error,
     hasMore,
     total,
@@ -453,9 +532,11 @@ export const useClientes = (): UseClientesReturn => {
     // Actions
     loadClientes,
     loadMoreClientes,
+    loadClientesPendientes,
     selectCliente,
     createCliente,
     updateCliente,
+    completarDatosCliente,
     deleteCliente,
     updateEstadoCliente,
     uploadClienteImage,
