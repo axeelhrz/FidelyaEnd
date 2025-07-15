@@ -187,7 +187,7 @@ export default function AsociacionDashboard() {
   // Render dashboard content
   const renderDashboardContent = () => {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="asociacion-page-container">
         <div className="p-6 space-y-8">
           {/* Header */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">

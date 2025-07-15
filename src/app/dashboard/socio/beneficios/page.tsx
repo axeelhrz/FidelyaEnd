@@ -1,6 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Gift, History, RefreshCw, Download, Building2, Users, Info } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { SocioSidebar } from '@/components/layout/SocioSidebar';
+import { BeneficiosList } from '@/components/beneficios/BeneficiosList';
+import { BeneficiosStats } from '@/components/beneficios/BeneficiosStats';
+import { BenefitsSourceInfo } from '@/components/socio/BenefitsSourceInfo';
+import { Button } from '@/components/ui/Button';
+import { useBeneficiosSocio } from '@/hooks/useBeneficios';
+import { useAuth } from '@/hooks/useAuth';
+import toast from 'react-hot-toast';
 
 // Define the type for BeneficioUsado
 type BeneficioUsado = {
@@ -14,16 +25,6 @@ type BeneficioUsado = {
   fechaUso: { toDate: () => Date };
   notas?: string;
 };
-import { motion } from 'framer-motion';
-import { Gift, History, RefreshCw, Download, Building2, Users } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { SocioSidebar } from '@/components/layout/SocioSidebar';
-import { BeneficiosList } from '@/components/beneficios/BeneficiosList';
-import { BeneficiosStats } from '@/components/beneficios/BeneficiosStats';
-import { Button } from '@/components/ui/Button';
-import { useBeneficiosSocio } from '@/hooks/useBeneficios';
-import { useAuth } from '@/hooks/useAuth';
-import toast from 'react-hot-toast';
 
 export default function SocioBeneficiosPage() {
   const { signOut } = useAuth();
@@ -38,7 +39,7 @@ export default function SocioBeneficiosPage() {
     estadisticasRapidas
   } = useBeneficiosSocio();
 
-  const [activeTab, setActiveTab] = useState<'disponibles' | 'usados'>('disponibles');
+  const [activeTab, setActiveTab] = useState<'disponibles' | 'usados' | 'info'>('disponibles');
 
   const handleUseBenefit = async (beneficioId: string, comercioId: string) => {
     try {
@@ -151,7 +152,7 @@ export default function SocioBeneficiosPage() {
                   Mis Beneficios
                 </h1>
                 <p className="text-lg text-slate-600 font-medium">
-                  Descubre y utiliza todos los descuentos y ofertas especiales de tu asociación y comercios afiliados
+                  Descubre y utiliza todos los descuentos y ofertas especiales disponibles para ti
                 </p>
               </div>
               <div className="flex gap-3">
@@ -244,24 +245,6 @@ export default function SocioBeneficiosPage() {
                 </div>
               </motion.div>
             </div>
-
-            {/* Información sobre fuentes de beneficios */}
-            <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white">
-                  <Users size={16} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 mb-1">
-                    Fuentes de tus beneficios
-                  </h3>
-                  <p className="text-sm text-blue-700">
-                    Los beneficios mostrados provienen de tu asociación y de los comercios afiliados a ella. 
-                    Esto te da acceso a una amplia variedad de descuentos y ofertas especiales.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Tabs */}
@@ -299,19 +282,33 @@ export default function SocioBeneficiosPage() {
                   {estadisticasRapidas.usados}
                 </span>
               </button>
+              <button
+                onClick={() => setActiveTab('info')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all ${
+                  activeTab === 'info'
+                    ? 'bg-slate-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Info size={18} />
+                Información
+              </button>
             </div>
           </div>
 
           {/* Contenido principal */}
-          {activeTab === 'disponibles' ? (
+          {activeTab === 'disponibles' && (
             <BeneficiosList
               beneficios={beneficios}
               loading={loading}
               userRole="socio"
               onUse={handleUseBenefit}
               onRefresh={refrescar}
+              showFilters={true}
             />
-          ) : (
+          )}
+
+          {activeTab === 'usados' && (
             <div>
               {beneficiosUsados.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -414,8 +411,12 @@ export default function SocioBeneficiosPage() {
             </div>
           )}
 
+          {activeTab === 'info' && (
+            <BenefitsSourceInfo />
+          )}
+
           {/* Estadísticas detalladas */}
-          {stats && (
+          {stats && activeTab === 'disponibles' && (
             <div className="mt-12">
               <BeneficiosStats
                 stats={stats}

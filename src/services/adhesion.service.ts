@@ -139,14 +139,21 @@ class AdhesionService {
         ...doc.data()
       })) as ComercioDisponible[];
 
-      // Filtrar por búsqueda
+      // Filtrar por búsqueda con validaciones de seguridad
       if (filtros.busqueda) {
         const searchTerm = filtros.busqueda.toLowerCase();
-        comercios = comercios.filter(comercio =>
-          comercio.nombreComercio.toLowerCase().includes(searchTerm) ||
-          comercio.nombre.toLowerCase().includes(searchTerm) ||
-          comercio.email.toLowerCase().includes(searchTerm)
-        );
+        comercios = comercios.filter(comercio => {
+          // Validar que las propiedades existan antes de llamar toLowerCase()
+          const nombreComercio = comercio.nombreComercio || '';
+          const nombre = comercio.nombre || '';
+          const email = comercio.email || '';
+          
+          return (
+            nombreComercio.toLowerCase().includes(searchTerm) ||
+            nombre.toLowerCase().includes(searchTerm) ||
+            email.toLowerCase().includes(searchTerm)
+          );
+        });
       }
 
       // Filtrar solo no vinculados
@@ -530,14 +537,22 @@ class AdhesionService {
         ...doc.data()
       })) as ComercioDisponible[];
 
-      // Filtrar por término de búsqueda
+      // Filtrar por término de búsqueda con validaciones de seguridad
       const searchTerm = termino.toLowerCase();
-      comercios = comercios.filter(comercio =>
-        comercio.nombreComercio.toLowerCase().includes(searchTerm) ||
-        comercio.nombre.toLowerCase().includes(searchTerm) ||
-        comercio.email.toLowerCase().includes(searchTerm) ||
-        comercio.categoria.toLowerCase().includes(searchTerm)
-      );
+      comercios = comercios.filter(comercio => {
+        // Validar que las propiedades existan antes de llamar toLowerCase()
+        const nombreComercio = comercio.nombreComercio || '';
+        const nombre = comercio.nombre || '';
+        const email = comercio.email || '';
+        const categoria = comercio.categoria || '';
+        
+        return (
+          nombreComercio.toLowerCase().includes(searchTerm) ||
+          nombre.toLowerCase().includes(searchTerm) ||
+          email.toLowerCase().includes(searchTerm) ||
+          categoria.toLowerCase().includes(searchTerm)
+        );
+      });
 
       return comercios;
     } catch (error) {

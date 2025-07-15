@@ -136,7 +136,312 @@ export class BeneficiosService {
     }
   }
 
-  // Obtener comercios afiliados a un socio - UPDATED to handle socios without association
+  // NUEVO MÉTODO PRINCIPAL: Obtener beneficios disponibles para socios (con o sin asociación)
+  static async obtenerBeneficiosDisponibles(
+    socioId: string,
+    asociacionId?: string,
+    filtros?: BeneficioFilter,
+    limite: number = 50
+  ): Promise<Beneficio[]> {
+    try {
+      console.log('🔍 Obteniendo beneficios disponibles para socio:', socioId, 'asociación:', asociacionId);
+
+      const cacheKey = this.getCacheKey('beneficios_disponibles_socio', { socioId, asociacionId, filtros, limite });
+      
+      if (this.isValidCache(cacheKey)) {
+        return this.getCache(cacheKey) as Beneficio[];
+      }
+
+      let beneficios: Beneficio[] = [];
+
+      if (asociacionId) {
+        // Socio con asociación: obtener beneficios de la asociación + comercios afiliados
+        beneficios = await this.obtenerBeneficiosConAsociacion(socioId, asociacionId, filtros, limite);
+      } else {
+        // Socio sin asociación: obtener beneficios públicos y directos
+        beneficios = await this.obtenerBeneficiosSinAsociacion(socioId, filtros, limite);
+      }
+
+      // Aplicar filtros adicionales
+      beneficios = this.aplicarFiltros(beneficios, filtros);
+
+      // Ordenar y limitar
+      beneficios = beneficios
+        .sort((a, b) => {
+          // Priorizar beneficios destacados
+          if (a.destacado && !b.destacado) return -1;
+          if (!a.destacado && b.destacado) return 1;
+          // Luego por fecha de creación
+          return b.creadoEn.toDate().getTime() - a.creadoEn.toDate().getTime();
+        })
+        .slice(0, limite);
+
+      this.setCache(cacheKey, beneficios);
+      console.log(`✅ Se encontraron ${beneficios.length} beneficios disponibles para el socio`);
+      
+      return beneficios;
+    } catch (error) {
+      console.error('❌ Error obteniendo beneficios disponibles:', error);
+      throw new Error('Error al obtener beneficios disponibles');
+    }
+  }
+
+  // Obtener beneficios para socios CON asociación
+  private static async obtenerBeneficiosConAsociacion(
+    socioId: string,
+    asociacionId: string,
+    filtros?: BeneficioFilter,
+    limite: number = 50
+  ): Promise<Beneficio[]> {
+    try {
+      console.log('🏢 Obteniendo beneficios para socio con asociación');
+
+      let beneficios: Beneficio[] = [];
+
+      // 1. Obtener beneficios de la asociación del socio
+      const qAsociacion = query(
+        collection(db, this.BENEFICIOS_COLLECTION),
+        where('estado', '==', 'activo'),
+        where('asociacionesDisponibles', 'array-contains', asociacionId),
+        orderBy('creadoEn', 'desc'),
+        limit(limite)
+      );
+
+      const snapshotAsociacion = await getDocs(qAsociacion);
+      const beneficiosAsociacion = snapshotAsociacion.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        origenBeneficio: 'asociacion' // Marcar origen
+      })) as unknown as Beneficio[];
+
+      beneficios = [...beneficiosAsociacion];
+
+      // 2. Obtener comercios vinculados a la asociación
+      const comerciosVinculados = await this.obtenerComerciosVinculadosAsociacion(asociacionId);
+      console.log('🏪 Comercios vinculados a la asociación:', comerciosVinculados.length);
+
+      // 3. Obtener beneficios de comercios vinculados
+      if (comerciosVinculados.length > 0) {
+        const lotes = [];
+        for (let i = 0; i < comerciosVinculados.length; i += 10) {
+          lotes.push(comerciosVinculados.slice(i, i + 10));
+        }
+
+        for (const lote of lotes) {
+          const qComercios = query(
+            collection(db, this.BENEFICIOS_COLLECTION),
+            where('estado', '==', 'activo'),
+            where('comercioId', 'in', lote),
+            orderBy('creadoEn', 'desc')
+          );
+
+          const snapshotComercios = await getDocs(qComercios);
+          const beneficiosComercios = snapshotComercios.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            origenBeneficio: 'comercio_vinculado' // Marcar origen
+          })) as unknown as Beneficio[];
+
+          beneficios = [...beneficios, ...beneficiosComercios];
+        }
+      }
+
+      // 4. Obtener beneficios públicos generales
+      const qPublicos = query(
+        collection(db, this.BENEFICIOS_COLLECTION),
+        where('estado', '==', 'activo'),
+        where('tipoAcceso', '==', 'publico'),
+        orderBy('creadoEn', 'desc'),
+        limit(20) // Limitar beneficios públicos
+      );
+
+      const snapshotPublicos = await getDocs(qPublicos);
+      const beneficiosPublicos = snapshotPublicos.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        origenBeneficio: 'publico' // Marcar origen
+      })) as unknown as Beneficio[];
+
+      beneficios = [...beneficios, ...beneficiosPublicos];
+
+      // Eliminar duplicados
+      const beneficiosUnicos = this.eliminarDuplicados(beneficios);
+
+      console.log(`✅ Beneficios con asociación: ${beneficiosUnicos.length}`);
+      return beneficiosUnicos;
+    } catch (error) {
+      console.error('❌ Error obteniendo beneficios con asociación:', error);
+      return [];
+    }
+  }
+
+  // Obtener beneficios para socios SIN asociación
+  private static async obtenerBeneficiosSinAsociacion(
+    socioId: string,
+    filtros?: BeneficioFilter,
+    limite: number = 50
+  ): Promise<Beneficio[]> {
+    try {
+      console.log('👤 Obteniendo beneficios para socio sin asociación');
+
+      let beneficios: Beneficio[] = [];
+
+      // 1. Obtener beneficios públicos
+      const qPublicos = query(
+        collection(db, this.BENEFICIOS_COLLECTION),
+        where('estado', '==', 'activo'),
+        where('tipoAcceso', '==', 'publico'),
+        orderBy('creadoEn', 'desc'),
+        limit(limite)
+      );
+
+      const snapshotPublicos = await getDocs(qPublicos);
+      const beneficiosPublicos = snapshotPublicos.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        origenBeneficio: 'publico'
+      })) as unknown as Beneficio[];
+
+      beneficios = [...beneficiosPublicos];
+
+      // 2. Obtener beneficios de acceso directo
+      const qDirectos = query(
+        collection(db, this.BENEFICIOS_COLLECTION),
+        where('estado', '==', 'activo'),
+        where('tipoAcceso', '==', 'directo'),
+        orderBy('creadoEn', 'desc'),
+        limit(30)
+      );
+
+      const snapshotDirectos = await getDocs(qDirectos);
+      const beneficiosDirectos = snapshotDirectos.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        origenBeneficio: 'directo'
+      })) as unknown as Beneficio[];
+
+      beneficios = [...beneficios, ...beneficiosDirectos];
+
+      // 3. Obtener comercios afiliados directamente al socio (si los hay)
+      const comerciosAfiliados = await this.obtenerComerciosAfiliadosSocio(socioId);
+      
+      if (comerciosAfiliados.length > 0) {
+        const lotes = [];
+        for (let i = 0; i < comerciosAfiliados.length; i += 10) {
+          lotes.push(comerciosAfiliados.slice(i, i + 10));
+        }
+
+        for (const lote of lotes) {
+          const qAfiliados = query(
+            collection(db, this.BENEFICIOS_COLLECTION),
+            where('estado', '==', 'activo'),
+            where('comercioId', 'in', lote),
+            orderBy('creadoEn', 'desc')
+          );
+
+          const snapshotAfiliados = await getDocs(qAfiliados);
+          const beneficiosAfiliados = snapshotAfiliados.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            origenBeneficio: 'comercio_afiliado'
+          })) as unknown as Beneficio[];
+
+          beneficios = [...beneficios, ...beneficiosAfiliados];
+        }
+      }
+
+      // Eliminar duplicados
+      const beneficiosUnicos = this.eliminarDuplicados(beneficios);
+
+      console.log(`✅ Beneficios sin asociación: ${beneficiosUnicos.length}`);
+      return beneficiosUnicos;
+    } catch (error) {
+      console.error('❌ Error obteniendo beneficios sin asociación:', error);
+      return [];
+    }
+  }
+
+  // Aplicar filtros a los beneficios
+  private static aplicarFiltros(beneficios: Beneficio[], filtros?: BeneficioFilter): Beneficio[] {
+    if (!filtros) return beneficios;
+
+    let beneficiosFiltrados = [...beneficios];
+
+    // Filtro por categoría
+    if (filtros.categoria) {
+      beneficiosFiltrados = beneficiosFiltrados.filter(b => b.categoria === filtros.categoria);
+    }
+
+    // Filtro por comercio
+    if (filtros.comercio) {
+      beneficiosFiltrados = beneficiosFiltrados.filter(b => b.comercioId === filtros.comercio);
+    }
+
+    // Solo destacados
+    if (filtros.soloDestacados) {
+      beneficiosFiltrados = beneficiosFiltrados.filter(b => b.destacado === true);
+    }
+
+    // Filtros de fecha y límites
+    const now = new Date();
+    beneficiosFiltrados = beneficiosFiltrados.filter(beneficio => {
+      // Verificar fecha de vencimiento
+      const fechaFin = beneficio.fechaFin.toDate();
+      if (fechaFin <= now) return false;
+
+      // Verificar fecha de inicio
+      const fechaInicio = beneficio.fechaInicio.toDate();
+      if (fechaInicio > now) return false;
+
+      // Verificar límite total
+      if (beneficio.limiteTotal && beneficio.usosActuales >= beneficio.limiteTotal) {
+        return false;
+      }
+
+      // Filtro de búsqueda
+      if (filtros.busqueda) {
+        const busqueda = filtros.busqueda.toLowerCase();
+        const coincide = 
+          beneficio.titulo.toLowerCase().includes(busqueda) ||
+          beneficio.descripcion.toLowerCase().includes(busqueda) ||
+          beneficio.comercioNombre.toLowerCase().includes(busqueda) ||
+          beneficio.categoria.toLowerCase().includes(busqueda) ||
+          beneficio.tags?.some(tag => tag.toLowerCase().includes(busqueda));
+        
+        if (!coincide) return false;
+      }
+
+      // Filtro de nuevos (últimos 7 días)
+      if (filtros.soloNuevos) {
+        const hace7Dias = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (beneficio.creadoEn.toDate() < hace7Dias) return false;
+      }
+
+      // Filtro de próximos a vencer (próximos 7 días)
+      if (filtros.proximosAVencer) {
+        const en7Dias = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (fechaFin > en7Dias) return false;
+      }
+
+      return true;
+    });
+
+    return beneficiosFiltrados;
+  }
+
+  // Eliminar beneficios duplicados
+  private static eliminarDuplicados(beneficios: Beneficio[]): Beneficio[] {
+    const beneficiosUnicos = beneficios.reduce((acc, beneficio) => {
+      if (!acc.find(b => b.id === beneficio.id)) {
+        acc.push(beneficio);
+      }
+      return acc;
+    }, [] as Beneficio[]);
+
+    return beneficiosUnicos;
+  }
+
+  // Obtener comercios afiliados a un socio
   private static async obtenerComerciosAfiliadosSocio(socioId: string): Promise<string[]> {
     try {
       const cacheKey = this.getCacheKey('comercios_afiliados_socio', { socioId });
@@ -164,42 +469,10 @@ export class BeneficiosService {
         comerciosAfiliados = [...new Set([...comerciosAfiliados, ...comerciosAsociacion])];
       }
 
-      // 3. Para socios sin asociación, obtener comercios con beneficios públicos
-      if (!socioInfo.asociacionId) {
-        const comerciosPublicos = await this.obtenerComerciosConBeneficiosPublicos();
-        comerciosAfiliados = [...new Set([...comerciosAfiliados, ...comerciosPublicos])];
-      }
-
       this.setCache(cacheKey, comerciosAfiliados);
       return comerciosAfiliados;
     } catch (error) {
       console.error('Error obteniendo comercios afiliados del socio:', error);
-      return [];
-    }
-  }
-
-  // Obtener comercios con beneficios públicos - NEW METHOD
-  private static async obtenerComerciosConBeneficiosPublicos(): Promise<string[]> {
-    try {
-      const cacheKey = 'comercios_beneficios_publicos';
-      
-      if (this.isValidCache(cacheKey)) {
-        return this.getCache(cacheKey) as string[];
-      }
-
-      const q = query(
-        collection(db, this.BENEFICIOS_COLLECTION),
-        where('estado', '==', 'activo'),
-        where('tipoAcceso', 'in', ['publico', 'directo'])
-      );
-
-      const snapshot = await getDocs(q);
-      const comerciosIds = [...new Set(snapshot.docs.map(doc => doc.data().comercioId))];
-
-      this.setCache(cacheKey, comerciosIds);
-      return comerciosIds;
-    } catch (error) {
-      console.error('Error obteniendo comercios con beneficios públicos:', error);
       return [];
     }
   }
@@ -213,16 +486,18 @@ export class BeneficiosService {
         return this.getCache(cacheKey) as string[];
       }
 
-      // Buscar en la colección de asociaciones los comercios vinculados
-      const asociacionDoc = await getDoc(doc(db, this.ASOCIACIONES_COLLECTION, asociacionId));
-      if (asociacionDoc.exists()) {
-        const data = asociacionDoc.data();
-        const comerciosVinculados = data.comerciosVinculados || [];
-        this.setCache(cacheKey, comerciosVinculados);
-        return comerciosVinculados;
-      }
+      // Buscar comercios que tengan esta asociación en su array de asociacionesVinculadas
+      const comerciosQuery = query(
+        collection(db, this.COMERCIOS_COLLECTION),
+        where('asociacionesVinculadas', 'array-contains', asociacionId),
+        where('estado', '==', 'activo')
+      );
 
-      return [];
+      const comerciosSnapshot = await getDocs(comerciosQuery);
+      const comerciosIds = comerciosSnapshot.docs.map(doc => doc.id);
+
+      this.setCache(cacheKey, comerciosIds);
+      return comerciosIds;
     } catch (error) {
       console.error('Error obteniendo comercios vinculados a la asociación:', error);
       return [];
@@ -243,136 +518,6 @@ export class BeneficiosService {
     } catch (error) {
       console.error('Error obteniendo asociaciones vinculadas:', error);
       return [];
-    }
-  }
-
-  // NEW METHOD: Get available benefits for a socio (supports socios without association)
-  static async getBeneficiosDisponibles(
-    socioId: string,
-    asociacionId?: string,
-    filtros?: BeneficioFilter,
-    limite: number = 50
-  ): Promise<Beneficio[]> {
-    try {
-      console.log('🔍 Obteniendo beneficios disponibles para socio:', socioId, 'asociación:', asociacionId);
-
-      const cacheKey = this.getCacheKey('beneficios_disponibles_socio', { socioId, asociacionId, filtros, limite });
-      
-      if (this.isValidCache(cacheKey)) {
-        return this.getCache(cacheKey) as Beneficio[];
-      }
-
-      let beneficios: Beneficio[] = [];
-
-      if (asociacionId) {
-        // Socio with association: get association benefits + affiliated comercios
-        beneficios = await this.obtenerBeneficiosDisponibles(socioId, asociacionId, filtros, limite);
-      } else {
-        // Socio without association: get public and direct benefits
-        const comerciosAfiliados = await this.obtenerComerciosAfiliadosSocio(socioId);
-        
-        if (comerciosAfiliados.length > 0) {
-          // Get public benefits from affiliated comercios
-          const lotes = [];
-          for (let i = 0; i < comerciosAfiliados.length; i += 10) {
-            lotes.push(comerciosAfiliados.slice(i, i + 10));
-          }
-
-          for (const lote of lotes) {
-            const q = query(
-              collection(db, this.BENEFICIOS_COLLECTION),
-              where('estado', '==', 'activo'),
-              where('comercioId', 'in', lote),
-              where('tipoAcceso', 'in', ['publico', 'directo']),
-              orderBy('creadoEn', 'desc')
-            );
-
-            const snapshot = await getDocs(q);
-            const beneficiosLote = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            })) as Beneficio[];
-
-            beneficios = [...beneficios, ...beneficiosLote];
-          }
-        }
-
-        // Also get general public benefits
-        const qPublicos = query(
-          collection(db, this.BENEFICIOS_COLLECTION),
-          where('estado', '==', 'activo'),
-          where('tipoAcceso', '==', 'publico'),
-          orderBy('creadoEn', 'desc'),
-          limit(limite)
-        );
-
-        const snapshotPublicos = await getDocs(qPublicos);
-        const beneficiosPublicos = snapshotPublicos.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Beneficio[];
-
-        beneficios = [...beneficios, ...beneficiosPublicos];
-
-        // Remove duplicates
-        const beneficiosUnicos = beneficios.reduce((acc, beneficio) => {
-          if (!acc.find(b => b.id === beneficio.id)) {
-            acc.push(beneficio);
-          }
-          return acc;
-        }, [] as Beneficio[]);
-
-        beneficios = beneficiosUnicos;
-      }
-
-      // Apply filters
-      if (filtros?.categoria) {
-        beneficios = beneficios.filter(b => b.categoria === filtros.categoria);
-      }
-
-      if (filtros?.comercio) {
-        beneficios = beneficios.filter(b => b.comercioId === filtros.comercio);
-      }
-
-      if (filtros?.soloDestacados) {
-        beneficios = beneficios.filter(b => b.destacado === true);
-      }
-
-      // Filter by date and limits
-      const now = new Date();
-      beneficios = beneficios.filter(beneficio => {
-        const fechaFin = beneficio.fechaFin.toDate();
-        const fechaInicio = beneficio.fechaInicio.toDate();
-        
-        if (fechaFin <= now || fechaInicio > now) return false;
-        if (beneficio.limiteTotal && beneficio.usosActuales >= beneficio.limiteTotal) return false;
-
-        if (filtros?.busqueda) {
-          const busqueda = filtros.busqueda.toLowerCase();
-          const coincide = 
-            beneficio.titulo.toLowerCase().includes(busqueda) ||
-            beneficio.descripcion.toLowerCase().includes(busqueda) ||
-            beneficio.comercioNombre.toLowerCase().includes(busqueda) ||
-            beneficio.categoria.toLowerCase().includes(busqueda);
-          
-          if (!coincide) return false;
-        }
-
-        return true;
-      });
-
-      // Sort and limit
-      beneficios = beneficios
-        .sort((a, b) => b.creadoEn.toDate().getTime() - a.creadoEn.toDate().getTime())
-        .slice(0, limite);
-
-      this.setCache(cacheKey, beneficios);
-      console.log(`✅ Se encontraron ${beneficios.length} beneficios disponibles para el socio`);
-      
-      return beneficios;
-    } catch (error) {
-      console.error('❌ Error obteniendo beneficios disponibles:', error);
-      throw new Error('Error al obtener beneficios disponibles');
     }
   }
 
@@ -420,6 +565,14 @@ export class BeneficiosService {
         throw new Error('No se pudo obtener la información de la asociación');
       }
 
+      // Determinar tipo de acceso
+      let tipoAcceso: 'publico' | 'asociacion' | 'directo' = 'publico';
+      if (asociacionesDisponibles.length > 0) {
+        tipoAcceso = 'asociacion';
+      } else if (data.tipoAcceso) {
+        tipoAcceso = data.tipoAcceso as 'publico' | 'asociacion' | 'directo';
+      }
+
       // Crear el objeto de datos base
       const beneficioDataBase = {
         titulo: data.titulo,
@@ -431,7 +584,7 @@ export class BeneficiosService {
         categoria: data.categoria,
         usosActuales: 0,
         estado: 'activo' as const,
-        tipoAcceso: asociacionesDisponibles.length > 0 ? 'asociacion' : 'publico', // Default access type
+        tipoAcceso,
         creadoEn: Timestamp.now(),
         actualizadoEn: Timestamp.now(),
         creadoPor: userId,
@@ -614,153 +767,7 @@ export class BeneficiosService {
     }
   }
 
-  // Consultas avanzadas - MÉTODO ACTUALIZADO PARA SOCIOS
-  static async obtenerBeneficiosDisponibles(
-    socioId: string,
-    asociacionId: string,
-    filtros?: BeneficioFilter,
-    limite: number = 50
-  ): Promise<Beneficio[]> {
-    try {
-      console.log('🔍 Obteniendo beneficios disponibles para socio:', socioId);
-
-      const cacheKey = this.getCacheKey('beneficios_disponibles', { socioId, asociacionId, filtros, limite });
-      
-      if (this.isValidCache(cacheKey)) {
-        return this.getCache(cacheKey) as Beneficio[];
-      }
-
-      // Obtener comercios afiliados al socio
-      const comerciosAfiliados = await this.obtenerComerciosAfiliadosSocio(socioId);
-      console.log('🏪 Comercios afiliados encontrados:', comerciosAfiliados.length);
-
-      let beneficios: Beneficio[] = [];
-
-      // 1. Obtener beneficios de la asociación del socio
-      const qAsociacion = query(
-        collection(db, this.BENEFICIOS_COLLECTION),
-        where('estado', '==', 'activo'),
-        where('asociacionesDisponibles', 'array-contains', asociacionId),
-        orderBy('creadoEn', 'desc'),
-        limit(limite)
-      );
-
-      const snapshotAsociacion = await getDocs(qAsociacion);
-      const beneficiosAsociacion = snapshotAsociacion.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Beneficio[];
-
-      beneficios = [...beneficiosAsociacion];
-
-      // 2. Obtener beneficios de comercios afiliados (si hay comercios afiliados)
-      if (comerciosAfiliados.length > 0) {
-        // Firebase tiene límite de 10 elementos en array-contains-any, así que dividimos en lotes
-        const lotes = [];
-        for (let i = 0; i < comerciosAfiliados.length; i += 10) {
-          lotes.push(comerciosAfiliados.slice(i, i + 10));
-        }
-
-        for (const lote of lotes) {
-          const qComercios = query(
-            collection(db, this.BENEFICIOS_COLLECTION),
-            where('estado', '==', 'activo'),
-            where('comercioId', 'in', lote),
-            orderBy('creadoEn', 'desc')
-          );
-
-          const snapshotComercios = await getDocs(qComercios);
-          const beneficiosComercios = snapshotComercios.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Beneficio[];
-
-          beneficios = [...beneficios, ...beneficiosComercios];
-        }
-      }
-
-      // Eliminar duplicados (un beneficio puede aparecer tanto por asociación como por comercio)
-      const beneficiosUnicos = beneficios.reduce((acc, beneficio) => {
-        if (!acc.find(b => b.id === beneficio.id)) {
-          acc.push(beneficio);
-        }
-        return acc;
-      }, [] as Beneficio[]);
-
-      // Aplicar filtros adicionales
-      if (filtros?.categoria) {
-        beneficios = beneficiosUnicos.filter(b => b.categoria === filtros.categoria);
-      } else {
-        beneficios = beneficiosUnicos;
-      }
-
-      if (filtros?.comercio) {
-        beneficios = beneficios.filter(b => b.comercioId === filtros.comercio);
-      }
-
-      if (filtros?.soloDestacados) {
-        beneficios = beneficios.filter(b => b.destacado === true);
-      }
-
-      // Filtros adicionales en el cliente
-      const now = new Date();
-      
-      beneficios = beneficios.filter(beneficio => {
-        // Verificar fecha de vencimiento
-        const fechaFin = beneficio.fechaFin.toDate();
-        if (fechaFin <= now) return false;
-
-        // Verificar fecha de inicio
-        const fechaInicio = beneficio.fechaInicio.toDate();
-        if (fechaInicio > now) return false;
-
-        // Verificar límite total
-        if (beneficio.limiteTotal && beneficio.usosActuales >= beneficio.limiteTotal) {
-          return false;
-        }
-
-        // Filtro de búsqueda
-        if (filtros?.busqueda) {
-          const busqueda = filtros.busqueda.toLowerCase();
-          const coincide = 
-            beneficio.titulo.toLowerCase().includes(busqueda) ||
-            beneficio.descripcion.toLowerCase().includes(busqueda) ||
-            beneficio.comercioNombre.toLowerCase().includes(busqueda) ||
-            beneficio.categoria.toLowerCase().includes(busqueda);
-          
-          if (!coincide) return false;
-        }
-
-        // Filtro de nuevos (últimos 7 días)
-        if (filtros?.soloNuevos) {
-          const hace7Dias = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          if (beneficio.creadoEn.toDate() < hace7Dias) return false;
-        }
-
-        // Filtro de próximos a vencer (próximos 7 días)
-        if (filtros?.proximosAVencer) {
-          const en7Dias = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-          if (fechaFin > en7Dias) return false;
-        }
-
-        return true;
-      });
-
-      // Ordenar por fecha de creación (más recientes primero) y limitar
-      beneficios = beneficios
-        .sort((a, b) => b.creadoEn.toDate().getTime() - a.creadoEn.toDate().getTime())
-        .slice(0, limite);
-
-      this.setCache(cacheKey, beneficios);
-      console.log(`✅ Se encontraron ${beneficios.length} beneficios disponibles para el socio`);
-      
-      return beneficios;
-    } catch (error) {
-      console.error('❌ Error obteniendo beneficios disponibles:', error);
-      throw new Error('Error al obtener beneficios disponibles');
-    }
-  }
-
+  // Consultas por rol
   static async obtenerBeneficiosPorComercio(comercioId: string): Promise<Beneficio[]> {
     try {
       const cacheKey = this.getCacheKey('beneficios_comercio', { comercioId });
@@ -816,9 +823,6 @@ export class BeneficiosService {
       throw new Error('Error al obtener beneficios de la asociación');
     }
   }
-
-  // Resto de métodos permanecen igual...
-  // [Incluir todos los métodos restantes del archivo anterior]
 
   // Uso de beneficios
   static async usarBeneficio(

@@ -27,20 +27,38 @@ import {
   Pause,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Gift,
+  Percent,
+  DollarSign,
+  Package,
+  Calendar,
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useComercios } from '@/hooks/useComercios';
 import { ComercioDisponible, SolicitudAdhesion } from '@/services/adhesion.service';
 import type { Comercio } from '@/services/comercio.service';
+import { Beneficio } from '@/types/beneficio';
+import { BeneficiosService } from '@/services/beneficios.service';
 import { VincularComercioDialog } from './VincularComercioDialog';
 import { CreateComercioDialog } from './CreateComercioDialog';
 import { EditComercioDialog } from './EditComercioDialog';
 import { QRGeneratorModal } from './QRGeneratorModal';
 import { ComercioValidationsModal } from './ComercioValidationsModal';
+import { ComerciosBeneficiosModal } from './ComerciosBeneficiosModal';
+import { formatCurrency } from '@/lib/utils';
 
 interface ComercioManagementProps {
   onNavigate?: (section: string) => void;
   initialFilter?: string | null;
+}
+
+interface ComercioConBeneficios extends ComercioDisponible {
+  beneficios?: Beneficio[];
+  loadingBeneficios?: boolean;
+  showBeneficios?: boolean;
 }
 
 // Rejection Modal Component
@@ -73,7 +91,7 @@ const RejectionModal: React.FC<{
               <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                 <XCircle className="h-6 w-6 text-red-600" />
               </div>
-              <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+              <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                 <h3 className="text-lg leading-6 font-medium text-gray-900">
                   Rechazar Solicitud
                 </h3>
@@ -119,6 +137,100 @@ const RejectionModal: React.FC<{
   );
 };
 
+// Componente para mostrar un beneficio individual
+const BeneficioCard: React.FC<{ beneficio: Beneficio }> = ({ beneficio }) => {
+  const getTipoIcon = (tipo: string) => {
+    switch (tipo) {
+      case 'porcentaje':
+        return <Percent className="w-3 h-3" />;
+      case 'monto_fijo':
+        return <DollarSign className="w-3 h-3" />;
+      case 'producto_gratis':
+        return <Package className="w-3 h-3" />;
+      default:
+        return <Gift className="w-3 h-3" />;
+    }
+  };
+
+  const formatDescuento = (beneficio: Beneficio) => {
+    switch (beneficio.tipo) {
+      case 'porcentaje':
+        return `${beneficio.descuento}%`;
+      case 'monto_fijo':
+        return formatCurrency(beneficio.descuento);
+      case 'producto_gratis':
+        return 'Gratis';
+      default:
+        return beneficio.descuento.toString();
+    }
+  };
+
+  const getEstadoColor = (estado: string) => {
+    switch (estado) {
+      case 'activo':
+        return 'bg-green-100 text-green-800';
+      case 'inactivo':
+        return 'bg-gray-100 text-gray-800';
+      case 'vencido':
+        return 'bg-red-100 text-red-800';
+      case 'agotado':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+            {getTipoIcon(beneficio.tipo)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-medium text-gray-900 truncate">
+              {beneficio.titulo}
+            </h4>
+            {beneficio.destacado && (
+              <Star className="w-3 h-3 text-yellow-500 fill-current inline ml-1" />
+            )}
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-bold text-green-600">
+            {formatDescuento(beneficio)}
+          </span>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getEstadoColor(beneficio.estado)}`}>
+            {beneficio.estado}
+          </span>
+        </div>
+      </div>
+      
+      <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+        {beneficio.descripcion}
+      </p>
+      
+      <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center space-x-3">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+            {beneficio.categoria}
+          </span>
+          <div className="flex items-center">
+            <Calendar className="w-3 h-3 mr-1" />
+            <span>
+              {beneficio.fechaFin.toDate().toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <Users className="w-3 h-3 mr-1" />
+          <span>{beneficio.usosActuales || 0} usos</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const ComercioManagement: React.FC<ComercioManagementProps> = ({ 
   onNavigate, 
   initialFilter 
@@ -149,6 +261,7 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [validationsModalOpen, setValidationsModalOpen] = useState(false);
+  const [beneficiosModalOpen, setBeneficiosModalOpen] = useState(false);
   const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
   const [selectedComercio, setSelectedComercio] = useState<Comercio | null>(null);
   const [selectedComercioForQR, setSelectedComercioForQR] = useState<{
@@ -156,6 +269,10 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
     nombreComercio: string;
     qrCode?: string;
     qrCodeUrl?: string;
+  } | null>(null);
+  const [selectedComercioForBeneficios, setSelectedComercioForBeneficios] = useState<{
+    id: string;
+    nombreComercio: string;
   } | null>(null);
   const [selectedSolicitud, setSelectedSolicitud] = useState<SolicitudAdhesion | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,6 +284,9 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
   const [comercioToDelete, setComercioToDelete] = useState<ComercioDisponible | null>(null);
   const [selectedComercios, setSelectedComercios] = useState<string[]>([]);
   const [currentView, setCurrentView] = useState<'vinculados' | 'solicitudes'>('vinculados');
+  
+  // Nuevo estado para manejar los beneficios de cada comercio
+  const [comerciosConBeneficios, setComerciossConBeneficios] = useState<ComercioConBeneficios[]>([]);
 
   // Apply initial filter from URL parameters
   useEffect(() => {
@@ -177,8 +297,73 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
     }
   }, [initialFilter]);
 
-  // Filtrar comercios vinculados
-  const comerciosFiltrados = comerciosVinculados.filter(comercio => {
+  // Cargar beneficios para cada comercio vinculado
+  useEffect(() => {
+    const cargarBeneficiosParaComercios = async () => {
+      if (comerciosVinculados.length === 0) {
+        setComerciossConBeneficios([]);
+        return;
+      }
+
+      // Inicializar comercios con estado de carga
+      const comerciosConEstado: ComercioConBeneficios[] = comerciosVinculados.map(comercio => ({
+        ...comercio,
+        beneficios: [],
+        loadingBeneficios: true,
+        showBeneficios: false
+      }));
+      
+      setComerciossConBeneficios(comerciosConEstado);
+
+      // Cargar beneficios para cada comercio
+      for (const comercio of comerciosVinculados) {
+        try {
+          // CAMBIO IMPORTANTE: Usar obtenerBeneficiosPorComercio para obtener SOLO los beneficios creados por el comercio
+          const beneficios = await BeneficiosService.obtenerBeneficiosPorComercio(comercio.id);
+          
+          setComerciossConBeneficios(prev => 
+            prev.map(c => 
+              c.id === comercio.id 
+                ? { 
+                    ...c, 
+                    // Filtrar solo beneficios activos y limitar a 3 para la vista previa
+                    beneficios: beneficios
+                      .filter(b => b.estado === 'activo')
+                      .slice(0, 3),
+                    loadingBeneficios: false 
+                  }
+                : c
+            )
+          );
+        } catch (error) {
+          console.error(`Error cargando beneficios para comercio ${comercio.id}:`, error);
+          setComerciossConBeneficios(prev => 
+            prev.map(c => 
+              c.id === comercio.id 
+                ? { ...c, beneficios: [], loadingBeneficios: false }
+                : c
+            )
+          );
+        }
+      }
+    };
+
+    cargarBeneficiosParaComercios();
+  }, [comerciosVinculados]);
+
+  // Función para alternar la visualización de beneficios
+  const toggleBeneficios = (comercioId: string) => {
+    setComerciossConBeneficios(prev => 
+      prev.map(c => 
+        c.id === comercioId 
+          ? { ...c, showBeneficios: !c.showBeneficios }
+          : c
+      )
+    );
+  };
+
+  // Filtrar comercios vinculados (ahora usando comerciosConBeneficios)
+  const comerciosFiltrados = comerciosConBeneficios.filter(comercio => {
     const matchesSearch = !searchTerm || 
       comercio.nombreComercio.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comercio.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -241,6 +426,15 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
       setRejectionModalOpen(false);
       setSelectedSolicitud(null);
     }
+  };
+
+  // Nueva función para manejar ver beneficios
+  const handleViewBeneficios = (comercio: ComercioDisponible) => {
+    setSelectedComercioForBeneficios({
+      id: comercio.id,
+      nombreComercio: comercio.nombreComercio
+    });
+    setBeneficiosModalOpen(true);
   };
 
   // Manejar desvinculación
@@ -849,7 +1043,7 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
       {currentView === 'solicitudes' ? (
         renderPendingRequests()
       ) : (
-        /* Comercios Vinculados List - Same as before but using real data */
+        /* Comercios Vinculados List */
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -996,6 +1190,72 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                           {comercio.puntuacion.toFixed(1)} ({comercio.totalReviews} reseñas)
                         </div>
                       )}
+
+                      {/* Sección de beneficios */}
+                      <div className="border-t border-gray-200 pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center text-sm text-gray-700">
+                            <Gift className="w-4 h-4 mr-2 text-purple-500" />
+                            <span className="font-medium">Beneficios</span>
+                            <span className="ml-1 text-gray-500">
+                              ({comercio.beneficiosActivos || 0})
+                            </span>
+                          </div>
+                          {comercio.beneficios && comercio.beneficios.length > 0 && (
+                            <button
+                              onClick={() => toggleBeneficios(comercio.id)}
+                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                            >
+                              {comercio.showBeneficios ? (
+                                <>
+                                  <ChevronUp className="w-4 h-4 mr-1" />
+                                  Ocultar
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-4 h-4 mr-1" />
+                                  Ver
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {comercio.loadingBeneficios ? (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                            <span className="ml-2 text-xs text-gray-500">Cargando beneficios...</span>
+                          </div>
+                        ) : comercio.beneficios && comercio.beneficios.length > 0 ? (
+                          <AnimatePresence>
+                            {comercio.showBeneficios && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="space-y-2"
+                              >
+                                {comercio.beneficios.map((beneficio) => (
+                                  <BeneficioCard key={beneficio.id} beneficio={beneficio} />
+                                ))}
+                                {comercio.beneficiosActivos > 3 && (
+                                  <button
+                                    onClick={() => handleViewBeneficios(comercio)}
+                                    className="w-full text-center py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                                  >
+                                    Ver todos los beneficios ({comercio.beneficiosActivos})
+                                  </button>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        ) : (
+                          <div className="text-center py-3">
+                            <Gift className="mx-auto h-6 w-6 text-gray-300" />
+                            <p className="text-xs text-gray-500 mt-1">Sin beneficios activos</p>
+                          </div>
+                        )}
+                      </div>
                       
                       <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                         <div className="flex items-center">
@@ -1008,6 +1268,14 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                         </div>
                         
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleViewBeneficios(comercio)}
+                            className="text-purple-600 hover:text-purple-900"
+                            title="Ver todos los beneficios"
+                          >
+                            <Eye size={16} />
+                          </button>
+
                           <button
                             onClick={() => handleViewValidations(comercio)}
                             className="text-purple-600 hover:text-purple-900"
@@ -1073,7 +1341,7 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
               </div>
             </div>
           ) : (
-            /* List View - Same structure but using real data */
+            /* List View */
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -1097,6 +1365,9 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Estado
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Beneficios
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Puntuación
@@ -1166,6 +1437,74 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                           )}
                         </div>
                       </td>
+
+                      {/* Nueva columna para beneficios en vista de lista */}
+                      <td className="px-6 py-4">
+                        <div className="max-w-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                              <Gift className="w-4 h-4 text-purple-500 mr-1" />
+                              <span className="text-sm text-gray-900">
+                                {comercio.beneficiosActivos || 0}
+                              </span>
+                              <span className="text-sm text-gray-500 ml-1">activos</span>
+                            </div>
+                            {comercio.beneficios && comercio.beneficios.length > 0 && (
+                              <button
+                                onClick={() => toggleBeneficios(comercio.id)}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                {comercio.showBeneficios ? (
+                                  <ChevronUp className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          
+                          {comercio.loadingBeneficios ? (
+                            <div className="flex items-center py-2">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+                              <span className="ml-2 text-xs text-gray-500">Cargando...</span>
+                            </div>
+                          ) : comercio.beneficios && comercio.beneficios.length > 0 ? (
+                            <AnimatePresence>
+                              {comercio.showBeneficios && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="space-y-1"
+                                >
+                                  {comercio.beneficios.slice(0, 2).map((beneficio) => (
+                                    <div key={beneficio.id} className="text-xs bg-gray-50 p-2 rounded">
+                                      <div className="font-medium text-gray-900 truncate">
+                                        {beneficio.titulo}
+                                      </div>
+                                      <div className="text-green-600 font-bold">
+                                        {beneficio.tipo === 'porcentaje' ? `${beneficio.descuento}%` :
+                                         beneficio.tipo === 'monto_fijo' ? formatCurrency(beneficio.descuento) :
+                                         'Gratis'}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {comercio.beneficiosActivos > 2 && (
+                                    <button
+                                      onClick={() => handleViewBeneficios(comercio)}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      +{comercio.beneficiosActivos - 2} más
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          ) : (
+                            <span className="text-xs text-gray-400">Sin beneficios</span>
+                          )}
+                        </div>
+                      </td>
                       
                       <td className="px-6 py-4 whitespace-nowrap">
                         {comercio.puntuacion > 0 ? (
@@ -1185,6 +1524,14 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                       
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleViewBeneficios(comercio)}
+                            className="text-purple-600 hover:text-purple-900"
+                            title="Ver todos los beneficios"
+                          >
+                            <Eye size={16} />
+                          </button>
+
                           <button
                             onClick={() => handleViewValidations(comercio)}
                             className="text-purple-600 hover:text-purple-900"
@@ -1303,27 +1650,24 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
         } : null}
         onLoadValidations={async (comercioId, filters?, limit?) => {
           try {
-            // Adapt filters to expected by getComercioValidations
             const adaptedFilters: Record<string, unknown> = {};
             if (filters?.fechaInicio) adaptedFilters.fechaDesde = filters.fechaInicio;
             if (filters?.fechaFin) adaptedFilters.fechaHasta = filters.fechaFin;
             if (filters?.estado) adaptedFilters.estado = filters.estado;
             if (filters?.socio) adaptedFilters.beneficioId = filters.socio;
             
-            // Call original hook
             const result = await getComercioValidations(comercioId, adaptedFilters, limit);
 
-            // Map ValidationData to the expected Validacion interface for the modal
             const validaciones = result.validaciones.map((validationData) => ({
               id: validationData.id,
               socioNombre: validationData.socioNombre,
-              socioEmail: '', // ValidationData doesn't have socioEmail, set empty
+              socioEmail: '',
               beneficioTitulo: validationData.beneficioTitulo,
-              beneficioDescripcion: '', // ValidationData doesn't have beneficioDescripcion, set empty
-              tipoDescuento: 'monto_fijo' as const, // Default type since ValidationData doesn't specify
+              beneficioDescripcion: '',
+              tipoDescuento: 'monto_fijo' as const,
               descuento: validationData.montoDescuento,
-              montoOriginal: validationData.montoDescuento, // Use same value as approximation
-              montoFinal: 0, // Calculate as original minus discount
+              montoOriginal: validationData.montoDescuento,
+              montoFinal: 0,
               estado: validationData.estado,
               fechaValidacion: validationData.fechaValidacion,
               metodoPago: validationData.metodoPago,
@@ -1357,6 +1701,15 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
           }
         }}
         loading={loading}
+      />
+
+      <ComerciosBeneficiosModal
+        isOpen={beneficiosModalOpen}
+        onClose={() => {
+          setBeneficiosModalOpen(false);
+          setSelectedComercioForBeneficios(null);
+        }}
+        comercio={selectedComercioForBeneficios}
       />
 
       {/* Rejection Modal */}

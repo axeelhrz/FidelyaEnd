@@ -1,25 +1,24 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { 
-  X, 
   Home, 
   Store, 
   Gift, 
   QrCode, 
   Users, 
-  Calendar,
   UserCheck,
   Plus,
   LogOut,
-  ChevronDown,
-  Clock,
+  ChevronRight,
   CheckCircle,
-  AlertCircle,
   Activity,
-  Scan
+  BarChart3,
+  Bell,
+  HelpCircle,
+  Star,
+  Zap
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useComercio } from '@/hooks/useComercio';
@@ -45,86 +44,74 @@ interface RealtimeStats {
   actividadReciente: number;
 }
 
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  route: string;
+  badge?: number;
+  isNew?: boolean;
+  description?: string;
+  submenu?: SubmenuItem[];
+}
+
+interface SubmenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  route: string;
+  count?: number;
+  urgent?: boolean;
+}
+
 export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
   open,
   onToggle,
   onMenuClick,
+  onLogoutClick,
   activeSection
 }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, signOut } = useAuth();
-  const { comercio, stats } = useComercio();
+  const { comercio, stats, loading: comercioLoading } = useComercio();
   
-  // Real-time stats state
+  // Optimized state management
   const [realtimeStats, setRealtimeStats] = useState<RealtimeStats>({
-    validacionesHoy: stats?.validacionesHoy || 0,
-    validacionesMes: stats?.validacionesMes || 0,
-    beneficiosActivos: stats?.beneficiosActivos || 0,
-    clientesUnicos: stats?.clientesUnicos || 0,
+    validacionesHoy: 0,
+    validacionesMes: 0,
+    beneficiosActivos: 0,
+    clientesUnicos: 0,
     qrGenerado: false,
     qrEscaneos: 0,
     qrEscaneosSemana: 0,
     actividadReciente: 0
   });
 
-  // Update stats when hooks change
-  useEffect(() => {
-    setRealtimeStats(prev => ({
-      ...prev,
-      validacionesHoy: stats?.validacionesHoy || 0,
-      validacionesMes: stats?.validacionesMes || 0,
-      beneficiosActivos: stats?.beneficiosActivos || 0,
-      clientesUnicos: stats?.clientesUnicos || 0,
-      qrGenerado: !!comercio?.qrCode
-    }));
-  }, [stats, comercio]);
-
-  // Submenu item type
-  type SubmenuItem = {
-    id: string;
-    label: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-    route: string;
-    count?: number;
-    urgent?: boolean;
-  };
-  
-  // Enhanced menu structure for Commerce - memoized to prevent unnecessary re-renders
-  const menuItems = useMemo(() => [
+  // Memoized menu items to prevent unnecessary re-renders
+  const menuItems: MenuItem[] = useMemo(() => [
     {
       id: 'dashboard',
       label: 'Dashboard',
       icon: Home,
-      description: 'Vista general',
-      gradient: 'from-sky-500 to-blue-600',
-      route: '/dashboard/comercio'
+      route: '/dashboard/comercio',
+      description: 'Vista general'
     },
     {
       id: 'perfil',
       label: 'Mi Perfil',
       icon: Store,
-      description: 'Información del comercio',
-      gradient: 'from-blue-500 to-indigo-600',
       route: '/dashboard/comercio/perfil',
-      submenu: [
-        { 
-          id: 'perfil-datos', 
-          label: 'Datos del Comercio', 
-          icon: Store,
-          route: '/dashboard/comercio/perfil'
-        } as SubmenuItem
-      ]
+      description: 'Información del comercio'
     },
     {
       id: 'beneficios',
       label: 'Beneficios',
       icon: Gift,
-      description: 'Gestionar ofertas',
-      gradient: 'from-purple-500 to-pink-600',
       route: '/dashboard/comercio/beneficios',
       badge: realtimeStats.beneficiosActivos,
+      description: 'Gestionar ofertas',
       submenu: [
         { 
           id: 'beneficios-lista', 
@@ -132,215 +119,87 @@ export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
           icon: Gift,
           count: realtimeStats.beneficiosActivos,
           route: '/dashboard/comercio/beneficios'
-        } as SubmenuItem,
+        },
         { 
           id: 'beneficios-crear', 
           label: 'Crear Beneficio', 
           icon: Plus,
           route: '/dashboard/comercio/beneficios?action=crear'
-        } as SubmenuItem,
-        { 
-          id: 'beneficios-activos', 
-          label: 'Beneficios Activos', 
-          icon: CheckCircle,
-          count: realtimeStats.beneficiosActivos,
-          route: '/dashboard/comercio/beneficios?filter=activos'
-        } as SubmenuItem,
-        { 
-          id: 'beneficios-vencidos', 
-          label: 'Beneficios Vencidos', 
-          icon: Clock,
-          route: '/dashboard/comercio/beneficios?filter=vencidos'
-        } as SubmenuItem
+        }
       ]
     },
     {
       id: 'qr',
       label: 'Código QR',
       icon: QrCode,
-      description: 'Gestión de QR',
-      gradient: 'from-emerald-500 to-green-600',
       route: '/dashboard/comercio/qr',
       badge: realtimeStats.qrEscaneos,
+      description: 'Gestión de QR',
       submenu: [
         { 
           id: 'qr-generar', 
           label: 'Generar QR', 
           icon: QrCode,
           route: '/dashboard/comercio/qr/generar'
-        } as SubmenuItem,
+        },
         { 
           id: 'qr-estadisticas', 
-          label: 'Estadísticas de Uso', 
+          label: 'Estadísticas', 
           icon: Activity,
           count: realtimeStats.qrEscaneos,
           route: '/dashboard/comercio/qr/estadisticas'
-        } as SubmenuItem
+        }
       ]
     },
     {
       id: 'validaciones',
       label: 'Validaciones',
       icon: UserCheck,
-      description: 'Historial de validaciones',
-      gradient: 'from-violet-500 to-purple-600',
       route: '/dashboard/comercio/validaciones',
       badge: realtimeStats.validacionesHoy,
-      submenu: [
-        { 
-          id: 'validaciones-recientes', 
-          label: 'Recientes', 
-          icon: Calendar,
-          count: realtimeStats.validacionesHoy,
-          route: '/dashboard/comercio/validaciones'
-        } as SubmenuItem,
-        { 
-          id: 'validaciones-historial', 
-          label: 'Historial Completo', 
-          icon: Activity,
-          route: '/dashboard/comercio/validaciones?tab=historial'
-        } as SubmenuItem,
-        { 
-          id: 'validaciones-exitosas', 
-          label: 'Exitosas', 
-          icon: CheckCircle,
-          route: '/dashboard/comercio/validaciones?filter=exitosas'
-        } as SubmenuItem,
-        { 
-          id: 'validaciones-fallidas', 
-          label: 'Fallidas', 
-          icon: AlertCircle,
-          route: '/dashboard/comercio/validaciones?filter=fallidas'
-        } as SubmenuItem
-      ]
+      description: 'Historial de validaciones'
     },
     {
       id: 'clientes',
       label: 'Clientes',
       icon: Users,
-      description: 'Gestión de clientes',
-      gradient: 'from-cyan-500 to-blue-600',
       route: '/dashboard/comercio/clientes',
       badge: realtimeStats.clientesUnicos,
-      submenu: [
-        { 
-          id: 'clientes-lista', 
-          label: 'Lista de Clientes', 
-          icon: Users,
-          count: realtimeStats.clientesUnicos,
-          route: '/dashboard/comercio/clientes'
-        } as SubmenuItem
-      ]
+      description: 'Gestión de clientes'
+    },
+    {
+      id: 'analytics',
+      label: 'Analytics',
+      icon: BarChart3,
+      route: '/dashboard/comercio/analytics',
+      isNew: true,
+      description: 'Métricas y reportes'
     }
   ], [realtimeStats]);
 
-  // Auto-expand menu items that have active sub-items
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  // Optimized stats calculation
+  const memoizedStats = useMemo(() => ({
+    validacionesHoy: stats?.validacionesHoy || 0,
+    validacionesMes: stats?.validacionesMes || 0,
+    beneficiosActivos: stats?.beneficiosActivos || 0,
+    clientesUnicos: stats?.clientesUnicos || 0,
+    qrGenerado: !!comercio?.qrCode,
+    qrEscaneos: 0,
+    qrEscaneosSemana: 0,
+    actividadReciente: 0
+  }), [stats, comercio]);
 
-  // Enhanced active state detection - memoized
-  const isActive = useCallback((itemId: string) => {
-    return activeSection === itemId || activeSection.startsWith(itemId + '-');
-  }, [activeSection]);
-
-  const isSubmenuItemActive = useCallback((subItem: SubmenuItem) => {
-    const currentPath = pathname;
-    const currentFilter = searchParams.get('filter');
-    const currentTab = searchParams.get('tab');
-    const currentAction = searchParams.get('action');
-    
-    // Check if we're on the beneficios page
-    if (currentPath === '/dashboard/comercio/beneficios') {
-      if (subItem.id === 'beneficios-lista' && !currentFilter && !currentAction) {
-        return true;
-      }
-      if (subItem.id === 'beneficios-crear' && currentAction === 'crear') {
-        return true;
-      }
-      if (subItem.id === 'beneficios-activos' && currentFilter === 'activos') {
-        return true;
-      }
-      if (subItem.id === 'beneficios-vencidos' && currentFilter === 'vencidos') {
-        return true;
-      }
-    }
-    
-    // Check if we're on the validaciones page
-    if (currentPath === '/dashboard/comercio/validaciones') {
-      if (subItem.id === 'validaciones-recientes' && !currentTab && !currentFilter) {
-        return true;
-      }
-      if (subItem.id === 'validaciones-historial' && currentTab === 'historial') {
-        return true;
-      }
-      if (subItem.id === 'validaciones-exitosas' && currentFilter === 'exitosas') {
-        return true;
-      }
-      if (subItem.id === 'validaciones-fallidas' && currentFilter === 'fallidas') {
-        return true;
-      }
-    }
-
-    // Check if we're on the clientes page
-    if (currentPath === '/dashboard/comercio/clientes') {
-      if (subItem.id === 'clientes-lista') {
-        return true;
-      }
-    }
-
-    // Check if we're on the perfil page
-    if (currentPath === '/dashboard/comercio/perfil') {
-      if (subItem.id === 'perfil-datos') {
-        return true;
-      }
-    }
-
-    // Check if we're on the QR pages
-    if (currentPath === '/dashboard/comercio/qr/generar') {
-      if (subItem.id === 'qr-generar') {
-        return true;
-      }
-    }
-
-    if (currentPath === '/dashboard/comercio/qr/estadisticas') {
-      if (subItem.id === 'qr-estadisticas') {
-        return true;
-      }
-    }
-    
-    // For other submenu items, check if the current path matches the route
-    const routeParts = subItem.route.split('?');
-    const routePath = routeParts[0];
-    const routeParams = new URLSearchParams(routeParts[1] || '');
-    
-    if (currentPath !== routePath) return false;
-    
-    // Check if all route parameters match current parameters
-    for (const [key, value] of routeParams.entries()) {
-      if (searchParams.get(key) !== value) return false;
-    }
-    
-    return true;
-  }, [pathname, searchParams]);
-
-  // Update expanded items based on current route
+  // Update stats only when memoized values change
   useEffect(() => {
-    const newExpanded = new Set<string>();
-    
-    menuItems.forEach(item => {
-      if (item.submenu) {
-        const hasActiveSubItem = item.submenu.some(subItem => isSubmenuItemActive(subItem));
-        if (hasActiveSubItem || isActive(item.id)) {
-          newExpanded.add(item.id);
-        }
-      }
-    });
-    
-    setExpandedItems(newExpanded);
-  }, [pathname, searchParams, isActive, isSubmenuItemActive, menuItems]);
+    setRealtimeStats(prev => ({
+      ...prev,
+      ...memoizedStats
+    }));
+  }, [memoizedStats]);
 
-  // Real-time Firebase listeners
+  // Optimized Firebase listener with cleanup
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
 
     const unsubscribers: (() => void)[] = [];
 
@@ -386,43 +245,6 @@ export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
       });
       unsubscribers.push(unsubscribeValidaciones);
 
-      // Listen to QR scans collection
-      const qrScansRef = collection(db, 'qr_scans');
-      const qrScansQuery = query(
-        qrScansRef,
-        where('comercioId', '==', user.uid),
-        orderBy('fechaEscaneo', 'desc'),
-        limit(100)
-      );
-
-      const unsubscribeQRScans = onSnapshot(qrScansQuery, (snapshot) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        
-        const qrEscaneos = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          const fechaEscaneo = data.fechaEscaneo?.toDate();
-          return fechaEscaneo && fechaEscaneo >= today;
-        }).length;
-
-        const qrEscaneosSemana = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          const fechaEscaneo = data.fechaEscaneo?.toDate();
-          return fechaEscaneo && fechaEscaneo >= weekAgo;
-        }).length;
-
-        setRealtimeStats(prev => ({
-          ...prev,
-          qrEscaneos,
-          qrEscaneosSemana
-        }));
-      }, (error) => {
-        console.error('Error listening to QR scans:', error);
-      });
-      unsubscribers.push(unsubscribeQRScans);
-
       // Listen to beneficios collection
       const beneficiosRef = collection(db, 'beneficios');
       const beneficiosQuery = query(
@@ -441,25 +263,6 @@ export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
       });
       unsubscribers.push(unsubscribeBeneficios);
 
-      // Listen to recent activity
-      const activityRef = collection(db, 'activities');
-      const activityQuery = query(
-        activityRef,
-        where('comercioId', '==', user.uid),
-        orderBy('timestamp', 'desc'),
-        limit(10)
-      );
-      
-      const unsubscribeActivity = onSnapshot(activityQuery, (snapshot) => {
-        setRealtimeStats(prev => ({
-          ...prev,
-          actividadReciente: snapshot.docs.length
-        }));
-      }, (error) => {
-        console.error('Error listening to activity:', error);
-      });
-      unsubscribers.push(unsubscribeActivity);
-
     } catch (error) {
       console.error('Error setting up Firebase listeners:', error);
     }
@@ -467,7 +270,57 @@ export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
     return () => {
       unsubscribers.forEach(unsubscribe => unsubscribe());
     };
-  }, [user]);
+  }, [user?.uid]);
+
+  // Optimized navigation handler
+  const handleNavigation = useCallback((route: string, itemId: string) => {
+    if (pathname !== route) {
+      router.push(route);
+    }
+    onMenuClick(itemId);
+  }, [router, pathname, onMenuClick]);
+
+  // Check if menu item is active
+  const isActiveItem = useCallback((item: MenuItem) => {
+    return pathname === item.route || activeSection === item.id;
+  }, [pathname, activeSection]);
+
+  // Check if submenu item is active
+  const isSubmenuItemActive = useCallback((subItem: SubmenuItem) => {
+    const currentPath = pathname;
+    const currentAction = searchParams.get('action');
+    
+    // Direct route match
+    if (currentPath === subItem.route) {
+      return true;
+    }
+    
+    // Check for action-based routes
+    if (subItem.id === 'beneficios-crear' && currentAction === 'crear') {
+      return true;
+    }
+    
+    return false;
+  }, [pathname, searchParams]);
+
+  // Auto-expand menu items that have active sub-items
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // Update expanded items based on current route
+  useEffect(() => {
+    const newExpanded = new Set<string>();
+    
+    menuItems.forEach(item => {
+      if (item.submenu) {
+        const hasActiveSubItem = item.submenu.some(subItem => isSubmenuItemActive(subItem));
+        if (hasActiveSubItem || isActiveItem(item)) {
+          newExpanded.add(item.id);
+        }
+      }
+    });
+    
+    setExpandedItems(newExpanded);
+  }, [pathname, searchParams, isActiveItem, isSubmenuItemActive, menuItems]);
 
   const toggleExpanded = (itemId: string) => {
     const newExpanded = new Set(expandedItems);
@@ -483,283 +336,291 @@ export const ComercioSidebar: React.FC<ComercioSidebarProps> = ({
     if (hasSubmenu) {
       toggleExpanded(itemId);
     } else if (route) {
-      router.push(route);
+      handleNavigation(route, itemId);
     } else {
       onMenuClick(itemId);
     }
   };
 
-  // Función para manejar el logout
+  // Handle logout
   const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+    if (onLogoutClick) {
+      onLogoutClick();
+    } else {
+      try {
+        await signOut();
+      } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+      }
     }
   };
 
-  const getItemGradient = (item: typeof menuItems[0]) => {
-    return item.gradient || 'from-gray-500 to-gray-600';
-  };
+  // Loading skeleton
+  if (comercioLoading) {
+    return (
+      <div className={`
+        fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-lg z-40 transition-all duration-300
+        ${open ? 'w-80' : 'w-0 lg:w-20'}
+        lg:relative lg:translate-x-0
+      `}>
+        <div className="p-6 space-y-4">
+          <div className="animate-pulse">
+            <div className="h-12 bg-gray-200 rounded-lg mb-4"></div>
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-10 bg-gray-200 rounded-lg"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      {/* Backdrop */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
-            onClick={onToggle}
-          />
-        )}
-      </AnimatePresence>
+      {/* Mobile backdrop */}
+      {open && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={onToggle}
+        />
+      )}
 
       {/* Sidebar */}
-      <motion.div
-        initial={{ x: -320 }}
-        animate={{ x: open ? 0 : -320 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 h-full w-80 bg-white/95 backdrop-blur-xl shadow-2xl z-50 lg:relative lg:translate-x-0 lg:shadow-xl border-r border-white/20"
-      >
+      <div className={`
+        fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-lg z-40 transition-all duration-300
+        ${open ? 'w-80' : 'w-0 lg:w-20'}
+        lg:relative lg:translate-x-0
+      `}>
         <div className="flex flex-col h-full">
-          {/* Enhanced Header */}
-          <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-violet-500 to-purple-600"></div>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            
-            {/* Floating elements */}
-            <div className="absolute top-2 right-4 w-8 h-8 bg-white/20 rounded-full blur-sm animate-pulse"></div>
-            <div className="absolute bottom-4 left-6 w-6 h-6 bg-white/15 rounded-full blur-sm animate-bounce"></div>
-            
-            <div className="relative z-10 flex items-center justify-between p-6">
-              <div className="flex items-center space-x-3">
-                <motion.div 
-                  className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  transition={{ duration: 0.2 }}
-                >
+          {/* Header */}
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-sm">
                   <Store className="w-6 h-6 text-white" />
-                </motion.div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">Panel Comercial</h2>
-                  <p className="text-sm text-purple-100 truncate max-w-32">
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+              </div>
+              
+              {open && (
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate">
                     {comercio?.nombreComercio || user?.nombre || 'Comercio'}
-                  </p>
+                  </h2>
+                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border text-emerald-600 bg-emerald-50 border-emerald-200">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Activo
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          {open && (
+            <div className="p-6 border-b border-gray-100">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-2xl font-bold text-purple-600">{realtimeStats.validacionesHoy}</p>
+                      <p className="text-sm text-purple-600/80">Hoy</p>
+                    </div>
+                    <UserCheck className="w-8 h-8 text-purple-500" />
+                  </div>
+                </div>
+                
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-2xl font-bold text-emerald-600">{realtimeStats.beneficiosActivos}</p>
+                      <p className="text-sm text-emerald-600/80">Activos</p>
+                    </div>
+                    <Gift className="w-8 h-8 text-emerald-500" />
+                  </div>
                 </div>
               </div>
               
-              <button
-                onClick={onToggle}
-                className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          </div>
-
-          {/* Enhanced Quick Stats */}
-          <div className="p-4 bg-gradient-to-br from-gray-50 to-white border-b border-gray-100">
-            <div className="grid grid-cols-2 gap-3">
-              <motion.div 
-                className="bg-white rounded-2xl p-3 text-center shadow-lg border border-gray-100"
-                whileHover={{ scale: 1.02, y: -2 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center justify-center space-x-2 mb-1">
-                  <div className="w-6 h-6 bg-gradient-to-r from-purple-500 to-violet-600 rounded-lg flex items-center justify-center">
-                    <UserCheck className="w-3 h-3 text-white" />
+              <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Activity className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-600">Este mes</span>
                   </div>
-                  <div className="text-lg font-black text-purple-600">{realtimeStats.validacionesHoy}</div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="text-lg font-semibold text-gray-900">{realtimeStats.validacionesMes}</p>
+                      <p className="text-xs text-gray-500">Validaciones</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-semibold text-gray-900">{realtimeStats.clientesUnicos}</p>
+                      <p className="text-xs text-gray-500">Clientes</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-600 font-medium">Hoy</div>
-              </motion.div>
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {menuItems.map((item) => {
+              const isActive = isActiveItem(item);
               
-              <motion.div 
-                className="bg-white rounded-2xl p-3 text-center shadow-lg border border-gray-100"
-                whileHover={{ scale: 1.02, y: -2 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center justify-center space-x-2 mb-1">
-                  <div className="w-6 h-6 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
-                    <Scan className="w-3 h-3 text-white" />
-                  </div>
-                  <div className="text-lg font-black text-emerald-600">{realtimeStats.qrEscaneos}</div>
-                </div>
-                <div className="text-xs text-gray-600 font-medium">QR Hoy</div>
-              </motion.div>
-            </div>
-            
-            {/* Activity indicator */}
-            <motion.div 
-              className="mt-3 flex items-center justify-center space-x-2 text-xs text-gray-500"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Activity className="w-3 h-3" />
-              <span>Actualización en tiempo real</span>
-            </motion.div>
-          </div>
-
-          {/* Enhanced Navigation */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3">
-            <div className="space-y-2">
-              {menuItems.map((item) => (
+              return (
                 <div key={item.id}>
-                  <motion.button
+                  <button
                     onClick={() => handleMenuClick(item.id, !!item.submenu, item.route)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-left transition-all duration-300 group relative overflow-hidden ${
-                      isActive(item.id)
-                        ? 'bg-gradient-to-r from-white to-gray-50 text-gray-900 shadow-lg border border-gray-200'
-                        : 'text-gray-700 hover:bg-white/80 hover:shadow-md'
-                    }`}
-                    whileHover={{ scale: 1.02, x: 4 }}
-                    whileTap={{ scale: 0.98 }}
+                    className={`
+                      w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200
+                      ${isActive 
+                        ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm' 
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      }
+                      ${!open && 'lg:justify-center lg:px-2'}
+                    `}
                   >
-                    {/* Background gradient on hover */}
-                    <div className={`absolute inset-0 bg-gradient-to-r ${getItemGradient(item)} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`}></div>
-                    
-                    <div className="flex items-center space-x-3 flex-1 min-w-0 relative z-10">
-                      <div className={`p-2.5 rounded-xl transition-all duration-300 ${
-                        isActive(item.id) 
-                          ? `bg-gradient-to-r ${getItemGradient(item)} text-white shadow-lg` 
-                          : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
-                      }`}>
-                        <item.icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-sm truncate block">{item.label}</span>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{item.description}</p>
-                      </div>
+                    <div className={`
+                      flex items-center justify-center w-8 h-8 rounded-lg transition-colors
+                      ${isActive ? 'bg-purple-100 text-purple-600' : 'text-gray-500'}
+                    `}>
+                      <item.icon className="w-5 h-5" />
                     </div>
                     
-                    {/* Badge and indicators */}
-                    <div className="flex items-center space-x-2 relative z-10">
-                      {item.badge !== undefined && item.badge > 0 && (
-                        <motion.div
-                          className="px-2 py-1 rounded-full text-xs font-bold bg-purple-500 text-white"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        >
-                          {item.badge > 99 ? '99+' : item.badge}
-                        </motion.div>
-                      )}
-                      
-                      {item.submenu && (
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${
-                          expandedItems.has(item.id) ? 'rotate-180' : ''
-                        } ${isActive(item.id) ? 'text-gray-700' : 'text-gray-400'}`} />
-                      )}
-                    </div>
-                  </motion.button>
-
-                  {/* Enhanced Submenu */}
-                  <AnimatePresence>
-                    {item.submenu && expandedItems.has(item.id) && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0, y: -10 }}
-                        animate={{ opacity: 1, height: 'auto', y: 0 }}
-                        exit={{ opacity: 0, height: 0, y: -10 }}
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
-                        className="ml-4 mt-2 space-y-1 border-l-2 border-gradient-to-b from-gray-200 to-transparent pl-4"
-                      >
-                        {item.submenu.map((subItem) => (
-                          <motion.button
-                            key={subItem.id}
-                            onClick={() => handleMenuClick(subItem.id, false, subItem.route)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-200 group ${
-                              isSubmenuItemActive(subItem)
-                                ? 'bg-gradient-to-r from-gray-50 to-white text-gray-900 border border-gray-200 shadow-sm'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                            whileHover={{ scale: 1.02, x: 2 }}
-                            whileTap={{ scale: 0.98 }}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 }}
-                          >
-                            <div className="flex items-center space-x-3 flex-1">
-                              <div className={`p-1.5 rounded-lg transition-all duration-200 ${
-                                isSubmenuItemActive(subItem)
-                                  ? `bg-gradient-to-r ${getItemGradient(item)} text-white shadow-md` 
-                                  : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'
-                              }`}>
-                                <subItem.icon className="w-3 h-3" />
-                              </div>
-                              <span className="text-sm font-medium truncate">{subItem.label}</span>
-                            </div>
-                            
-                            {/* Submenu badges */}
-                            {subItem.count !== undefined && subItem.count > 0 && (
-                              <motion.div
-                                className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                  subItem.urgent 
-                                    ? 'bg-red-500 text-white animate-pulse' 
-                                    : 'bg-gray-500 text-white'
-                                }`}
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 0.2 }}
-                              >
-                                {subItem.count}
-                              </motion.div>
+                    {open && (
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium truncate">{item.label}</span>
+                            {item.isNew && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <Zap className="w-3 h-3 mr-1" />
+                                Nuevo
+                              </span>
                             )}
-                          </motion.button>
-                        ))}
-                      </motion.div>
+                          </div>
+                          {item.description && (
+                            <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-purple-500 rounded-full min-w-[20px]">
+                              {item.badge > 99 ? '99+' : item.badge}
+                            </span>
+                          )}
+                          {item.submenu && (
+                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${
+                              expandedItems.has(item.id) ? 'rotate-90' : ''
+                            } ${isActive ? 'text-purple-600' : 'text-gray-400'}`} />
+                          )}
+                        </div>
+                      </>
                     )}
-                  </AnimatePresence>
+                  </button>
+
+                  {/* Submenu */}
+                  {item.submenu && expandedItems.has(item.id) && open && (
+                    <div className="ml-4 mt-2 space-y-1 border-l-2 border-gray-200 pl-4">
+                      {item.submenu.map((subItem) => (
+                        <button
+                          key={subItem.id}
+                          onClick={() => handleMenuClick(subItem.id, false, subItem.route)}
+                          className={`
+                            w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-200
+                            ${isSubmenuItemActive(subItem)
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center space-x-3 flex-1">
+                            <div className={`p-1.5 rounded-lg transition-all duration-200 ${
+                              isSubmenuItemActive(subItem)
+                                ? 'bg-purple-100 text-purple-600' 
+                                : 'bg-gray-100 text-gray-400'
+                            }`}>
+                              <subItem.icon className="w-3 h-3" />
+                            </div>
+                            <span className="text-sm font-medium truncate">{subItem.label}</span>
+                          </div>
+                          
+                          {subItem.count !== undefined && subItem.count > 0 && (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-gray-500 rounded-full min-w-[16px]">
+                              {subItem.count}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </nav>
 
-          {/* Enhanced User Info */}
-          <div className="p-4 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white">
-            <div className="flex items-center space-x-3 mb-4">
-              <motion.div 
-                className="w-12 h-12 bg-gradient-to-r from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <span className="text-white font-bold text-lg">
-                  {comercio?.nombreComercio?.charAt(0).toUpperCase() || user?.nombre?.charAt(0).toUpperCase() || 'C'}
-                </span>
-              </motion.div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate">
-                  {comercio?.nombreComercio || user?.nombre || 'Comercio'}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {user?.email || 'comercio@email.com'}
-                </p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-emerald-600 font-medium">En línea</span>
-                </div>
+          {/* Quick Actions */}
+          {open && (
+            <div className="p-4 border-t border-gray-100">
+              <div className="space-y-2">
+                <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+                  <Bell className="w-4 h-4" />
+                  <span className="text-sm">Notificaciones</span>
+                </button>
+                
+                <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="text-sm">Ayuda</span>
+                </button>
               </div>
             </div>
-            
-            <motion.button
-              onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-red-600 hover:bg-red-50 transition-all duration-200 group border border-red-200 hover:border-red-300 hover:shadow-md"
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <div className="p-2 rounded-xl bg-red-100 text-red-600 group-hover:bg-red-200 transition-colors duration-200">
-                <LogOut className="w-4 h-4" />
+          )}
+
+          {/* User Section */}
+          <div className="p-4 border-t border-gray-100">
+            {open ? (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-semibold text-sm">
+                      {(comercio?.nombreComercio || user?.nombre)?.charAt(0).toUpperCase() || 'C'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {comercio?.nombreComercio || user?.nombre || 'Comercio'}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {user?.email || 'comercio@email.com'}
+                    </p>
+                  </div>
+                  <div className="flex items-center">
+                    <Star className="w-4 h-4 text-amber-400" />
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="font-medium">Cerrar Sesión</span>
+                </button>
               </div>
-              <span className="font-semibold text-sm">Cerrar Sesión</span>
-              <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <ChevronDown className="w-4 h-4 -rotate-90" />
-              </div>
-            </motion.button>
+            ) : (
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
-      </motion.div>
+      </div>
     </>
   );
 };

@@ -1,29 +1,33 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { 
-  X, 
   Home, 
   Users, 
   Store, 
   BarChart3, 
   Gift,
   LogOut,
-  ChevronDown,
-  UserCheck,
-  Building2,
-  Activity,
-  Clock,
+  ChevronRight,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Activity,
+  Building2,
+  Bell,
+  HelpCircle,
+  Star,
+  Zap,
+  Clock,
+  UserCheck,
+  Plus
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocios } from '@/hooks/useSocios';
 import { useComercios } from '@/hooks/useComercios';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useSidebarNavigation } from '@/hooks/useSidebarNavigation';
 
 interface AsociacionSidebarProps {
   open: boolean;
@@ -31,6 +35,7 @@ interface AsociacionSidebarProps {
   onMenuClick: (section: string) => void;
   onLogoutClick: () => void;
   activeSection: string;
+  isMobile?: boolean;
 }
 
 interface RealtimeStats {
@@ -41,84 +46,75 @@ interface RealtimeStats {
   comerciosActivos: number;
   solicitudesPendientes: number;
   actividadReciente: number;
+  beneficiosActivos: number;
+}
+
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  route: string;
+  badge?: number;
+  isNew?: boolean;
+  description?: string;
+  submenu?: SubmenuItem[];
+}
+
+interface SubmenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  route: string;
+  count?: number;
+  urgent?: boolean;
 }
 
 export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
   open,
-  onToggle,
   onMenuClick,
   onLogoutClick,
-  activeSection
+  activeSection,
 }) => {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { stats } = useSocios();
   const { stats: comerciosStats } = useComercios();
   
-  // Real-time stats state
-  const [realtimeStats, setRealtimeStats] = useState<RealtimeStats>({
-    totalSocios: stats?.total || 0,
-    sociosActivos: stats?.activos || 0,
-    sociosVencidos: stats?.vencidos || 0,
-    totalComercios: comerciosStats?.totalComercios || 0,
-    comerciosActivos: comerciosStats?.comerciosActivos || 0,
-    solicitudesPendientes: comerciosStats?.solicitudesPendientes || 0,
-    actividadReciente: 0
+  // Use the custom navigation hook
+  const { navigate } = useSidebarNavigation({
+    onMenuClick,
+    debounceMs: 150
   });
 
-  // Update stats when hooks change
-  useEffect(() => {
-    setRealtimeStats(prev => ({
-      ...prev,
-      totalSocios: stats?.total || 0,
-      sociosActivos: stats?.activos || 0,
-      sociosVencidos: stats?.vencidos || 0,
-      totalComercios: comerciosStats?.totalComercios || 0,
-      comerciosActivos: comerciosStats?.comerciosActivos || 0,
-      solicitudesPendientes: comerciosStats?.solicitudesPendientes || 0
-    }));
-  }, [stats, comerciosStats]);
+  // Optimized state management
+  const [realtimeStats, setRealtimeStats] = useState<RealtimeStats>({
+    totalSocios: 0,
+    sociosActivos: 0,
+    sociosVencidos: 0,
+    totalComercios: 0,
+    comerciosActivos: 0,
+    solicitudesPendientes: 0,
+    actividadReciente: 0,
+    beneficiosActivos: 0
+  });
 
-  // Submenu item type
-  type SubmenuItem = {
-    id: string;
-    label: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-    route: string;
-    count?: number;
-    urgent?: boolean;
-  };
-  
-  // Simplified menu structure without notifications
-  const menuItems: Array<{
-    id: string;
-    label: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-    description: string;
-    gradient: string;
-    route: string;
-    badge?: number;
-    urgent?: boolean;
-    submenu?: SubmenuItem[];
-  }> = [
+  // Memoized menu items to prevent unnecessary re-renders
+  const menuItems: MenuItem[] = useMemo(() => [
     {
       id: 'dashboard',
-      label: 'Vista General',
+      label: 'Dashboard',
       icon: Home,
-      description: 'Dashboard principal',
-      gradient: 'from-sky-500 to-blue-600',
-      route: '/dashboard/asociacion'
+      route: '/dashboard/asociacion',
+      description: 'Vista general'
     },
     {
       id: 'socios',
       label: 'Gestión de Socios',
       icon: Users,
-      description: 'Administrar miembros',
-      gradient: 'from-blue-500 to-indigo-600',
       route: '/dashboard/asociacion/socios',
       badge: realtimeStats.totalSocios,
+      description: 'Administrar miembros',
       submenu: [
         { 
           id: 'socios-lista', 
@@ -148,10 +144,9 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
       id: 'comercios',
       label: 'Gestión de Comercios',
       icon: Store,
-      description: 'Red de comercios afiliados',
-      gradient: 'from-emerald-500 to-green-600',
       route: '/dashboard/asociacion/comercios',
       badge: realtimeStats.comerciosActivos,
+      description: 'Red de comercios afiliados',
       submenu: [
         { 
           id: 'comercios-vinculados', 
@@ -174,15 +169,22 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
       id: 'beneficios',
       label: 'Gestión de Beneficios',
       icon: Gift,
-      description: 'Ofertas y promociones',
-      gradient: 'from-purple-500 to-pink-600',
       route: '/dashboard/asociacion/beneficios',
+      badge: realtimeStats.beneficiosActivos,
+      description: 'Ofertas y promociones',
       submenu: [
         { 
           id: 'beneficios-lista', 
           label: 'Todos los Beneficios', 
           icon: Gift,
+          count: realtimeStats.beneficiosActivos,
           route: '/dashboard/asociacion/beneficios'
+        },
+        { 
+          id: 'beneficios-crear', 
+          label: 'Crear Beneficio', 
+          icon: Plus,
+          route: '/dashboard/asociacion/beneficios?action=crear'
         },
         { 
           id: 'beneficios-validaciones', 
@@ -196,17 +198,35 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
       id: 'analytics',
       label: 'Analytics Avanzado',
       icon: BarChart3,
-      description: 'Métricas y análisis',
-      gradient: 'from-violet-500 to-purple-600',
-      route: '/dashboard/asociacion/analytics'
+      route: '/dashboard/asociacion/analytics',
+      isNew: true,
+      description: 'Métricas y análisis'
     }
-  ];
+  ], [realtimeStats]);
 
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set(['socios']));
+  // Optimized stats calculation
+  const memoizedStats = useMemo(() => ({
+    totalSocios: stats?.total || 0,
+    sociosActivos: stats?.activos || 0,
+    sociosVencidos: stats?.vencidos || 0,
+    totalComercios: comerciosStats?.totalComercios || 0,
+    comerciosActivos: comerciosStats?.comerciosActivos || 0,
+    solicitudesPendientes: comerciosStats?.solicitudesPendientes || 0,
+    actividadReciente: 0,
+    beneficiosActivos: 0
+  }), [stats, comerciosStats]);
 
-  // Real-time Firebase listeners
+  // Update stats only when memoized values change
   useEffect(() => {
-    if (!user) return;
+    setRealtimeStats(prev => ({
+      ...prev,
+      ...memoizedStats
+    }));
+  }, [memoizedStats]);
+
+  // Optimized Firebase listener with cleanup
+  useEffect(() => {
+    if (!user?.uid) return;
 
     const unsubscribers: (() => void)[] = [];
 
@@ -234,7 +254,7 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
 
       // Listen to comercios collection
       const comerciosRef = collection(db, 'comercios');
-      const comerciosQuery = query(comerciosRef, where('asociacionId', '==', user.uid));
+      const comerciosQuery = query(comerciosRef, where('asociacionesVinculadas', 'array-contains', user.uid));
       
       const unsubscribeComercios = onSnapshot(comerciosQuery, (snapshot) => {
         type ComercioDoc = { id: string; estado?: string; estadoSolicitud?: string };
@@ -253,12 +273,30 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
       });
       unsubscribers.push(unsubscribeComercios);
 
+      // Listen to beneficios collection
+      const beneficiosRef = collection(db, 'beneficios');
+      const beneficiosQuery = query(
+        beneficiosRef, 
+        where('asociacionesDisponibles', 'array-contains', user.uid),
+        where('estado', '==', 'activo')
+      );
+      
+      const unsubscribeBeneficios = onSnapshot(beneficiosQuery, (snapshot) => {
+        setRealtimeStats(prev => ({
+          ...prev,
+          beneficiosActivos: snapshot.docs.length
+        }));
+      }, (error) => {
+        console.error('Error listening to beneficios:', error);
+      });
+      unsubscribers.push(unsubscribeBeneficios);
+
       // Listen to recent activity
-      const activityRef = collection(db, 'activities');
+      const activityRef = collection(db, 'validaciones');
       const activityQuery = query(
         activityRef,
         where('asociacionId', '==', user.uid),
-        orderBy('timestamp', 'desc'),
+        orderBy('fechaHora', 'desc'),
         limit(10)
       );
       
@@ -279,356 +317,356 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
     return () => {
       unsubscribers.forEach(unsubscribe => unsubscribe());
     };
-  }, [user]);
+  }, [user?.uid]);
 
-  const toggleExpanded = (itemId: string) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(itemId)) {
-      newExpanded.delete(itemId);
-    } else {
-      newExpanded.add(itemId);
-    }
-    setExpandedItems(newExpanded);
-  };
+  // Auto-expand menu items that have active sub-items
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  const handleMenuClick = (itemId: string, hasSubmenu: boolean = false, route?: string) => {
-    if (hasSubmenu) {
-      toggleExpanded(itemId);
-    } else if (route) {
-      router.push(route);
-    } else {
-      onMenuClick(itemId);
-    }
-  };
+  // Optimized navigation handler
 
-  // Enhanced active state detection
-  const isActive = (itemId: string) => {
-    return activeSection === itemId || activeSection.startsWith(itemId + '-');
-  };
+  // Check if menu item is active
+  const isActiveItem = useCallback((item: MenuItem) => {
+    return pathname === item.route || activeSection === item.id;
+  }, [pathname, activeSection]);
 
-  const isSubmenuItemActive = (subItem: SubmenuItem) => {
+  // Check if submenu item is active
+  const isSubmenuItemActive = useCallback((subItem: SubmenuItem) => {
     const currentPath = pathname;
     const currentFilter = searchParams.get('filter');
     const currentTab = searchParams.get('tab');
+    const currentAction = searchParams.get('action');
     
-    // Check if we're on the socios page
+    // Direct route match
+    if (currentPath === subItem.route) {
+      return true;
+    }
+    
+    // Check for filter-based routes
     if (currentPath === '/dashboard/asociacion/socios') {
-      if (subItem.id === 'socios-lista' && !currentFilter) {
-        return true;
-      }
-      if (subItem.id === 'socios-activos' && currentFilter === 'activos') {
-        return true;
-      }
-      if (subItem.id === 'socios-vencidos' && currentFilter === 'vencidos') {
-        return true;
-      }
+      if (subItem.id === 'socios-lista' && !currentFilter) return true;
+      if (subItem.id === 'socios-activos' && currentFilter === 'activos') return true;
+      if (subItem.id === 'socios-vencidos' && currentFilter === 'vencidos') return true;
     }
     
-    // Check if we're on the comercios page
     if (currentPath === '/dashboard/asociacion/comercios') {
-      if (subItem.id === 'comercios-vinculados' && !currentFilter) {
-        return true;
-      }
-      if (subItem.id === 'comercios-solicitudes' && currentFilter === 'solicitudes') {
-        return true;
-      }
+      if (subItem.id === 'comercios-vinculados' && !currentFilter) return true;
+      if (subItem.id === 'comercios-solicitudes' && currentFilter === 'solicitudes') return true;
     }
 
-    // Check if we're on the beneficios page
     if (currentPath === '/dashboard/asociacion/beneficios') {
-      if (subItem.id === 'beneficios-lista' && !currentTab) {
-        return true;
-      }
-      if (subItem.id === 'beneficios-validaciones' && currentTab === 'validaciones') {
-        return true;
-      }
-      if (subItem.id === 'beneficios-destacados' && currentTab === 'destacados') {
-        return true;
-      }
+      if (subItem.id === 'beneficios-lista' && !currentTab && !currentAction) return true;
+      if (subItem.id === 'beneficios-crear' && currentAction === 'crear') return true;
+      if (subItem.id === 'beneficios-validaciones' && currentTab === 'validaciones') return true;
     }
     
-    // For other submenu items, check if the current path matches the route
-    const routeParts = subItem.route.split('?');
-    const routePath = routeParts[0];
-    const routeParams = new URLSearchParams(routeParts[1] || '');
-    
-    if (currentPath !== routePath) return false;
-    
-    // Check if all route parameters match current parameters
-    for (const [key, value] of routeParams.entries()) {
-      if (searchParams.get(key) !== value) return false;
-    }
-    
-    return true;
-  };
+    return false;
+  }, [pathname, searchParams]);
 
-  const getItemGradient = (item: typeof menuItems[0]) => {
-    return item.gradient || 'from-gray-500 to-gray-600';
+  // Update expanded items based on current route
+  useEffect(() => {
+    const newExpanded = new Set<string>();
+    
+    menuItems.forEach(item => {
+      if (item.submenu) {
+        const hasActiveSubItem = item.submenu.some(subItem => isSubmenuItemActive(subItem));
+        if (hasActiveSubItem || isActiveItem(item)) {
+          newExpanded.add(item.id);
+        }
+      }
+    });
+    
+    setExpandedItems(newExpanded);
+  }, [pathname, searchParams, isActiveItem, isSubmenuItemActive, menuItems]);
+
+  const toggleExpanded = useCallback((itemId: string) => {
+    setExpandedItems(prevExpanded => {
+      const newExpanded = new Set(prevExpanded);
+      if (newExpanded.has(itemId)) {
+        newExpanded.delete(itemId);
+      } else {
+        newExpanded.add(itemId);
+      }
+      return newExpanded;
+    });
+  }, []);
+
+  const handleMenuClick = useCallback((itemId: string, hasSubmenu: boolean = false, route?: string) => {
+    if (hasSubmenu) {
+      toggleExpanded(itemId);
+    } else if (route) {
+      // Use the navigation hook instead of direct router calls
+      navigate(route, itemId);
+    } else {
+      onMenuClick(itemId);
+    }
+  }, [navigate, onMenuClick, toggleExpanded]);
+
+  // Handle logout
+  const handleLogout = async () => {
+    if (onLogoutClick) {
+      onLogoutClick();
+    } else {
+      try {
+        await signOut();
+      } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+      }
+    }
   };
 
   return (
-    <>
-      {/* Backdrop */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
-            onClick={onToggle}
-          />
-        )}
-      </AnimatePresence>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl flex items-center justify-center shadow-sm">
+              <Building2 className="w-6 h-6 text-white" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+          </div>
+          
+          {open && (
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900 truncate">
+                {user?.nombre || 'Asociación'}
+              </h2>
+              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border text-emerald-600 bg-emerald-50 border-emerald-200">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Panel Ejecutivo
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Sidebar */}
-      <motion.div
-        initial={{ x: -320 }}
-        animate={{ x: open ? 0 : -320 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 h-full w-80 bg-white/95 backdrop-blur-xl shadow-2xl z-50 lg:relative lg:translate-x-0 lg:shadow-xl border-r border-white/20"
-      >
-        <div className="flex flex-col h-full">
-          {/* Enhanced Header */}
-          <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-sky-500 via-celestial-500 to-sky-600"></div>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            
-            {/* Floating elements */}
-            <div className="absolute top-2 right-4 w-8 h-8 bg-white/20 rounded-full blur-sm animate-pulse"></div>
-            <div className="absolute bottom-4 left-6 w-6 h-6 bg-white/15 rounded-full blur-sm animate-bounce"></div>
-            
-            <div className="relative z-10 flex items-center justify-between p-6">
-              <div className="flex items-center space-x-3">
-                <motion.div 
-                  className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Building2 className="w-6 h-6 text-white" />
-                </motion.div>
+      {/* Quick Stats */}
+      {open && (
+        <div className="p-6 border-b border-gray-100 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Panel Ejecutivo</h2>
-                  <p className="text-sm text-sky-100 truncate max-w-32">
-                    {user?.nombre || 'Asociación'}
-                  </p>
+                  <p className="text-2xl font-bold text-sky-600">{realtimeStats.totalSocios}</p>
+                  <p className="text-sm text-sky-600/80">Socios</p>
+                </div>
+                <Users className="w-8 h-8 text-sky-500" />
+              </div>
+            </div>
+            
+            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600">{realtimeStats.comerciosActivos}</p>
+                  <p className="text-sm text-emerald-600/80">Comercios</p>
+                </div>
+                <Store className="w-8 h-8 text-emerald-500" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Activity className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-600">Estado actual</span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-gray-900">{realtimeStats.sociosActivos}</p>
+                  <p className="text-xs text-gray-500">Activos</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-gray-900">{realtimeStats.beneficiosActivos}</p>
+                  <p className="text-xs text-gray-500">Beneficios</p>
                 </div>
               </div>
-              
-              <button
-                onClick={onToggle}
-                className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          </div>
-
-          {/* Enhanced Quick Stats */}
-          <div className="p-4 bg-gradient-to-br from-gray-50 to-white border-b border-gray-100">
-            <div className="grid grid-cols-2 gap-3">
-              <motion.div 
-                className="bg-white rounded-2xl p-3 text-center shadow-lg border border-gray-100"
-                whileHover={{ scale: 1.02, y: -2 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center justify-center space-x-2 mb-1">
-                  <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                    <Users className="w-3 h-3 text-white" />
-                  </div>
-                  <div className="text-lg font-black text-blue-600">{realtimeStats.totalSocios}</div>
-                </div>
-                <div className="text-xs text-gray-600 font-medium">Socios</div>
-              </motion.div>
-              
-              <motion.div 
-                className="bg-white rounded-2xl p-3 text-center shadow-lg border border-gray-100"
-                whileHover={{ scale: 1.02, y: -2 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center justify-center space-x-2 mb-1">
-                  <div className="w-6 h-6 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
-                    <Store className="w-3 h-3 text-white" />
-                  </div>
-                  <div className="text-lg font-black text-emerald-600">{realtimeStats.comerciosActivos}</div>
-                </div>
-                <div className="text-xs text-gray-600 font-medium">Comercios</div>
-              </motion.div>
             </div>
             
-            {/* Activity indicator */}
-            <motion.div 
-              className="mt-3 flex items-center justify-center space-x-2 text-xs text-gray-500"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Activity className="w-3 h-3" />
-              <span>Actualización en tiempo real</span>
-            </motion.div>
-          </div>
-
-          {/* Enhanced Navigation */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3">
-            <div className="space-y-2">
-              {menuItems.map((item) => (
-                <div key={item.id}>
-                  <motion.button
-                    onClick={() => handleMenuClick(item.id, !!item.submenu, item.route)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-left transition-all duration-300 group relative overflow-hidden ${
-                      isActive(item.id)
-                        ? 'bg-gradient-to-r from-white to-gray-50 text-gray-900 shadow-lg border border-gray-200'
-                        : 'text-gray-700 hover:bg-white/80 hover:shadow-md'
-                    }`}
-                    whileHover={{ scale: 1.02, x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {/* Background gradient on hover */}
-                    <div className={`absolute inset-0 bg-gradient-to-r ${getItemGradient(item)} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`}></div>
-                    
-                    <div className="flex items-center space-x-3 flex-1 min-w-0 relative z-10">
-                      <div className={`p-2.5 rounded-xl transition-all duration-300 ${
-                        isActive(item.id) 
-                          ? `bg-gradient-to-r ${getItemGradient(item)} text-white shadow-lg` 
-                          : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
-                      }`}>
-                        <item.icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-sm truncate block">{item.label}</span>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{item.description}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Badge and indicators */}
-                    <div className="flex items-center space-x-2 relative z-10">
-                      {item.badge !== undefined && item.badge > 0 && (
-                        <motion.div
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            item.urgent 
-                              ? 'bg-red-500 text-white animate-pulse' 
-                              : 'bg-blue-500 text-white'
-                          }`}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        >
-                          {item.badge > 99 ? '99+' : item.badge}
-                        </motion.div>
-                      )}
-                      
-                      {item.submenu && (
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${
-                          expandedItems.has(item.id) ? 'rotate-180' : ''
-                        } ${isActive(item.id) ? 'text-gray-700' : 'text-gray-400'}`} />
-                      )}
-                    </div>
-                  </motion.button>
-
-                  {/* Enhanced Submenu */}
-                  <AnimatePresence>
-                    {item.submenu && expandedItems.has(item.id) && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0, y: -10 }}
-                        animate={{ opacity: 1, height: 'auto', y: 0 }}
-                        exit={{ opacity: 0, height: 0, y: -10 }}
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
-                        className="ml-4 mt-2 space-y-1 border-l-2 border-gradient-to-b from-gray-200 to-transparent pl-4"
-                      >
-                        {item.submenu.map((subItem) => (
-                          <motion.button
-                            key={subItem.id}
-                            onClick={() => handleMenuClick(subItem.id, false, subItem.route)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-200 group ${
-                              isSubmenuItemActive(subItem)
-                                ? 'bg-gradient-to-r from-gray-50 to-white text-gray-900 border border-gray-200 shadow-sm'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                            whileHover={{ scale: 1.02, x: 2 }}
-                            whileTap={{ scale: 0.98 }}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 }}
-                          >
-                            <div className="flex items-center space-x-3 flex-1">
-                              <div className={`p-1.5 rounded-lg transition-all duration-200 ${
-                                isSubmenuItemActive(subItem)
-                                  ? `bg-gradient-to-r ${getItemGradient(item)} text-white shadow-md` 
-                                  : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'
-                              }`}>
-                                <subItem.icon className="w-3 h-3" />
-                              </div>
-                              <span className="text-sm font-medium truncate">{subItem.label}</span>
-                            </div>
-                            
-                            {/* Submenu badges */}
-                            {subItem.count !== undefined && subItem.count > 0 && (
-                              <motion.div
-                                className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                  subItem.urgent 
-                                    ? 'bg-red-500 text-white animate-pulse' 
-                                    : 'bg-gray-500 text-white'
-                                }`}
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 0.2 }}
-                              >
-                                {subItem.count}
-                              </motion.div>
-                            )}
-                          </motion.button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+            {realtimeStats.sociosVencidos > 0 && (
+              <div className="mt-3 flex items-center justify-between p-2 bg-red-50 rounded-lg border border-red-100">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <span className="text-sm text-red-600">Socios vencidos</span>
                 </div>
-              ))}
-            </div>
-          </nav>
+                <span className="text-sm font-semibold text-red-600">{realtimeStats.sociosVencidos}</span>
+              </div>
+            )}
+            
+            {realtimeStats.solicitudesPendientes > 0 && (
+              <div className="mt-2 flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100">
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm text-amber-600">Solicitudes pendientes</span>
+                </div>
+                <span className="text-sm font-semibold text-amber-600">{realtimeStats.solicitudesPendientes}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-          {/* Enhanced User Info */}
-          <div className="p-4 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white">
-            <div className="flex items-center space-x-3 mb-4">
-              <motion.div 
-                className="w-12 h-12 bg-gradient-to-r from-sky-500 to-celestial-600 rounded-2xl flex items-center justify-center shadow-lg"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ duration: 0.2 }}
+      {/* Navigation */}
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        {menuItems.map((item) => {
+          const isActive = isActiveItem(item);
+          
+          return (
+            <div key={item.id}>
+              <button
+                onClick={() => handleMenuClick(item.id, !!item.submenu, item.route)}
+                className={`
+                  w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200
+                  ${isActive 
+                    ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm' 
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                  }
+                  ${!open && 'justify-center px-2'}
+                `}
               >
-                <span className="text-white font-bold text-lg">
+                <div className={`
+                  flex items-center justify-center w-8 h-8 rounded-lg transition-colors
+                  ${isActive ? 'bg-sky-100 text-sky-600' : 'text-gray-500'}
+                `}>
+                  <item.icon className="w-5 h-5" />
+                </div>
+                
+                {open && (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium truncate">{item.label}</span>
+                        {item.isNew && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <Zap className="w-3 h-3 mr-1" />
+                            Nuevo
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-sky-500 rounded-full min-w-[20px]">
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </span>
+                      )}
+                      {item.submenu && (
+                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${
+                          expandedItems.has(item.id) ? 'rotate-90' : ''
+                        } ${isActive ? 'text-sky-600' : 'text-gray-400'}`} />
+                      )}
+                    </div>
+                  </>
+                )}
+              </button>
+
+              {/* Submenu */}
+              {item.submenu && expandedItems.has(item.id) && open && (
+                <div className="ml-4 mt-2 space-y-1 border-l-2 border-gray-200 pl-4">
+                  {item.submenu.map((subItem) => (
+                    <button
+                      key={subItem.id}
+                      onClick={() => handleMenuClick(subItem.id, false, subItem.route)}
+                      className={`
+                        w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-200
+                        ${isSubmenuItemActive(subItem)
+                          ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }
+                      `}
+                    >
+                      <div className="flex items-center space-x-3 flex-1">
+                        <div className={`p-1.5 rounded-lg transition-all duration-200 ${
+                          isSubmenuItemActive(subItem)
+                            ? 'bg-sky-100 text-sky-600' 
+                            : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          <subItem.icon className="w-3 h-3" />
+                        </div>
+                        <span className="text-sm font-medium truncate">{subItem.label}</span>
+                      </div>
+                      
+                      {subItem.count !== undefined && subItem.count > 0 && (
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full min-w-[16px] ${
+                          subItem.urgent 
+                            ? 'text-white bg-red-500' 
+                            : 'text-white bg-gray-500'
+                        }`}>
+                          {subItem.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Quick Actions */}
+      {open && (
+        <div className="p-4 border-t border-gray-100 flex-shrink-0">
+          <div className="space-y-2">
+            <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+              <Bell className="w-4 h-4" />
+              <span className="text-sm">Notificaciones</span>
+            </button>
+            
+            <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+              <HelpCircle className="w-4 h-4" />
+              <span className="text-sm">Ayuda</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* User Section */}
+      <div className="p-4 border-t border-gray-100 flex-shrink-0">
+        {open ? (
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
+              <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-sky-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-semibold text-sm">
                   {user?.nombre?.charAt(0).toUpperCase() || 'A'}
                 </span>
-              </motion.div>
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate">
+                <p className="text-sm font-medium text-gray-900 truncate">
                   {user?.nombre || 'Administrador'}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
                   {user?.email || 'admin@asociacion.com'}
                 </p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-emerald-600 font-medium">En línea</span>
-                </div>
+              </div>
+              <div className="flex items-center">
+                <Star className="w-4 h-4 text-amber-400" />
               </div>
             </div>
             
-            <motion.button
-              onClick={onLogoutClick}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-red-600 hover:bg-red-50 transition-all duration-200 group border border-red-200 hover:border-red-300 hover:shadow-md"
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-200"
             >
-              <div className="p-2 rounded-xl bg-red-100 text-red-600 group-hover:bg-red-200 transition-colors duration-200">
-                <LogOut className="w-4 h-4" />
-              </div>
-              <span className="font-semibold text-sm">Cerrar Sesión</span>
-              <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <ChevronDown className="w-4 h-4 -rotate-90" />
-              </div>
-            </motion.button>
+              <LogOut className="w-4 h-4" />
+              <span className="font-medium">Cerrar Sesión</span>
+            </button>
           </div>
-        </div>
-      </motion.div>
-    </>
+        ) : (
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+            title="Cerrar Sesión"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 };
 

@@ -21,7 +21,7 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
   onSuccess
 }) => {
   const { user } = useAuth();
-  const { comerciosVinculados } = useComercios();
+  const { comerciosVinculados, loadComercios } = useComercios();
   
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<BeneficioFormData>({
@@ -42,6 +42,14 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
 
   const [selectedComercio, setSelectedComercio] = useState('');
   const [newTag, setNewTag] = useState('');
+
+  // Cargar comercios vinculados cuando se abre el modal
+  useEffect(() => {
+    if (isOpen && user && user.role === 'asociacion') {
+      console.log('Cargando comercios vinculados para asociación:', user.uid);
+      loadComercios();
+    }
+  }, [isOpen, user, loadComercios]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -69,7 +77,12 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user || !selectedComercio) {
+    if (!user) {
+      toast.error('Debes iniciar sesión para crear un beneficio');
+      return;
+    }
+
+    if (!selectedComercio) {
       toast.error('Selecciona un comercio para el beneficio');
       return;
     }
@@ -81,7 +94,18 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
 
     setLoading(true);
     try {
-      await BeneficiosService.crearBeneficio(formData, selectedComercio, 'comercio');
+      // Asegurarse de que asociacionesDisponibles incluya el ID de la asociación actual
+      const updatedFormData = {
+        ...formData,
+        comercioId: selectedComercio,
+        asociacionesDisponibles: user.role === 'asociacion' ? [user.uid] : formData.asociacionesDisponibles
+      };
+
+      console.log('Creando beneficio con datos:', updatedFormData);
+      console.log('Comercio seleccionado:', selectedComercio);
+      console.log('Rol de usuario:', user.role);
+
+      await BeneficiosService.crearBeneficio(updatedFormData, user.uid, user.role);
       toast.success('Beneficio creado exitosamente');
       onSuccess();
       onClose();
@@ -199,12 +223,21 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
                     className="form-select"
                   >
                     <option value="">Seleccionar comercio</option>
-                    {comerciosVinculados.map(comercio => (
-                      <option key={comercio.id} value={comercio.id}>
-                        {comercio.nombreComercio}
-                      </option>
-                    ))}
+                    {comerciosVinculados.length > 0 ? (
+                      comerciosVinculados.map(comercio => (
+                        <option key={comercio.id} value={comercio.id}>
+                          {comercio.nombreComercio}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No hay comercios disponibles</option>
+                    )}
                   </select>
+                  {comerciosVinculados.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      No hay comercios vinculados. Debes vincular comercios antes de crear beneficios.
+                    </p>
+                  )}
                 </div>
 
                 <div>

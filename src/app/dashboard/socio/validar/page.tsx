@@ -176,7 +176,7 @@ const SocioValidarContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar datos iniciales con manejo de errores mejorado - UPDATED to support socios without association
+  // Cargar datos iniciales con manejo de errores mejorado - FIXED method name
   const loadInitialData = useCallback(async () => {
     if (!user) {
       console.log('❌ Usuario no disponible');
@@ -195,8 +195,8 @@ const SocioValidarContent: React.FC = () => {
       );
 
       const dataPromises = [
-        // Cargar beneficios disponibles con manejo de errores específico - UPDATED
-        BeneficiosService.getBeneficiosDisponibles(user.uid, user.asociacionId)
+        // FIXED: Usar el nombre correcto del método
+        BeneficiosService.obtenerBeneficiosDisponibles(user.uid, user.asociacionId)
           .catch(error => {
             console.warn('⚠️ Error cargando beneficios, usando datos por defecto:', error);
             return []; // Retornar array vacío en caso de error

@@ -1,38 +1,52 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  Grid3X3, 
-  List, 
-  SlidersHorizontal,
-  X,
-  RefreshCw,
-  Download,
-  Plus
+import {
+  Gift,
+  Calendar,
+  Tag,
+  Users,
+  Building2,
+  Star,
+  Clock,
+  Percent,
+  DollarSign,
+  Package,
+  Eye,
+  Heart,
+  Share2,
+  Search,
+  SortAsc,
+  SortDesc,
+  Grid,
+  List,
+  RefreshCw
 } from 'lucide-react';
-import { BeneficioCard } from './BeneficioCard';
-import { Beneficio, BeneficioFilter, CATEGORIAS_BENEFICIOS } from '@/types/beneficio';
+import { Beneficio as BeneficioBase } from '@/types/beneficio';
+
+type OrigenBeneficio = 'asociacion' | 'comercio_vinculado' | 'comercio_afiliado' | 'publico' | 'directo' | string;
+
+interface Beneficio extends BeneficioBase {
+  origenBeneficio?: OrigenBeneficio;
+}
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { useDebounce } from '@/hooks/useDebounce';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface BeneficiosListProps {
   beneficios: Beneficio[];
   loading?: boolean;
   userRole?: 'socio' | 'comercio' | 'asociacion';
-  onUse?: (beneficioId: string, comercioId: string) => Promise<void>;
+  onUse?: (beneficioId: string, comercioId: string) => void;
   onEdit?: (beneficio: Beneficio) => void;
   onDelete?: (beneficioId: string) => void;
-  onToggleStatus?: (beneficioId: string, estado: 'activo' | 'inactivo') => void;
   onRefresh?: () => void;
-  onExport?: () => void;
-  onCreateNew?: () => void;
-  showCreateButton?: boolean;
   showFilters?: boolean;
-  className?: string;
 }
+
+type SortOption = 'fecha' | 'titulo' | 'descuento' | 'categoria' | 'vencimiento';
+type ViewMode = 'grid' | 'list';
 
 export const BeneficiosList: React.FC<BeneficiosListProps> = ({
   beneficios,
@@ -40,355 +54,673 @@ export const BeneficiosList: React.FC<BeneficiosListProps> = ({
   userRole = 'socio',
   onUse,
   onEdit,
-  onDelete,
-  onToggleStatus,
   onRefresh,
-  onExport,
-  onCreateNew,
-  showCreateButton = false,
-  showFilters = true,
-  className = ''
+  showFilters = true
 }) => {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [filters, setFilters] = useState<BeneficioFilter>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [sortBy, setSortBy] = useState<SortOption>('fecha');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  // Obtener categorías únicas
+  const categories = Array.from(new Set(beneficios.map(b => b.categoria))).sort();
 
   // Filtrar y ordenar beneficios
-  const filteredBeneficios = useMemo(() => {
-    let filtered = [...beneficios];
+  const filteredBeneficios = beneficios
+    .filter(beneficio => {
+      const matchesSearch = 
+        beneficio.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        beneficio.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        beneficio.comercioNombre.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = !selectedCategory || beneficio.categoria === selectedCategory;
+      const matchesFavorites = !showOnlyFavorites || favorites.has(beneficio.id);
+      
+      return matchesSearch && matchesCategory && matchesFavorites;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'fecha':
+          comparison = a.creadoEn.toDate().getTime() - b.creadoEn.toDate().getTime();
+          break;
+        case 'titulo':
+          comparison = a.titulo.localeCompare(b.titulo);
+          break;
+        case 'descuento':
+          comparison = a.descuento - b.descuento;
+          break;
+        case 'categoria':
+          comparison = a.categoria.localeCompare(b.categoria);
+          break;
+        case 'vencimiento':
+          comparison = a.fechaFin.toDate().getTime() - b.fechaFin.toDate().getTime();
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
 
-    // Filtro de búsqueda
-    if (debouncedSearchTerm) {
-      const searchLower = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter(beneficio =>
-        beneficio.titulo.toLowerCase().includes(searchLower) ||
-        beneficio.descripcion.toLowerCase().includes(searchLower) ||
-        beneficio.comercioNombre.toLowerCase().includes(searchLower) ||
-        beneficio.categoria.toLowerCase().includes(searchLower)
-      );
+  const toggleFavorite = (beneficioId: string) => {
+    const newFavorites = new Set(favorites);
+    if (newFavorites.has(beneficioId)) {
+      newFavorites.delete(beneficioId);
     }
-
-    // Filtros adicionales
-    if (filters.categoria) {
-      filtered = filtered.filter(b => b.categoria === filters.categoria);
-    }
-
-    if (filters.estado) {
-      filtered = filtered.filter(b => b.estado === filters.estado);
-    }
-
-    if (filters.soloDestacados) {
-      filtered = filtered.filter(b => b.destacado);
-    }
-
-    if (filters.soloNuevos) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(b => b.creadoEn.toDate() > sevenDaysAgo);
-    }
-
-    if (filters.proximosAVencer) {
-      const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(b => 
-        b.fechaFin.toDate() <= sevenDaysFromNow && 
-        b.fechaFin.toDate() > new Date()
-      );
-    }
-
-    // Ordenar por fecha de creación (más recientes primero)
-    filtered.sort((a, b) => b.creadoEn.toDate().getTime() - a.creadoEn.toDate().getTime());
-
-    return filtered;
-  }, [beneficios, debouncedSearchTerm, filters]);
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setFilters({});
+    setFavorites(newFavorites);
   };
 
-  const hasActiveFilters = debouncedSearchTerm || Object.keys(filters).some(key => filters[key as keyof BeneficioFilter]);
+  const getOrigenIcon = (beneficio: Beneficio) => {
+    const origen = beneficio.origenBeneficio;
+    
+    switch (origen) {
+      case 'asociacion':
+        return (
+          <Users className="w-4 h-4 text-purple-600">
+            <title>Beneficio de tu asociación</title>
+          </Users>
+        );
+      case 'comercio_vinculado':
+        return (
+          <span className="inline-flex items-center">
+            <Building2 className="w-4 h-4 text-blue-600" />
+            <title>Comercio vinculado a tu asociación</title>
+          </span>
+        );
+      case 'comercio_afiliado':
+        return (
+          <Building2 className="w-4 h-4 text-green-600">
+            <title>Comercio afiliado</title>
+          </Building2>
+        );
+      case 'publico':
+        return (
+          <Gift className="w-4 h-4 text-orange-600">
+            <title>Beneficio público</title>
+          </Gift>
+        );
+      case 'directo':
+        return (
+          <Star className="w-4 h-4 text-yellow-600">
+            <title>Acceso directo</title>
+          </Star>
+        );
+      default:
+        return <Gift className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getOrigenLabel = (beneficio: Beneficio) => {
+    const origen = beneficio.origenBeneficio;
+    
+    switch (origen) {
+      case 'asociacion':
+        return 'Tu Asociación';
+      case 'comercio_vinculado':
+        return 'Comercio Vinculado';
+      case 'comercio_afiliado':
+        return 'Comercio Afiliado';
+      case 'publico':
+        return 'Público';
+      case 'directo':
+        return 'Acceso Directo';
+      default:
+        return 'Disponible';
+    }
+  };
+
+  const getOrigenColor = (beneficio: Beneficio) => {
+    const origen = beneficio.origenBeneficio;
+    
+    switch (origen) {
+      case 'asociacion':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'comercio_vinculado':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'comercio_afiliado':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'publico':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'directo':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const renderBeneficioCard = (beneficio: Beneficio, index: number) => {
+    const diasRestantes = Math.ceil(
+      (beneficio.fechaFin.toDate().getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    const isFavorite = favorites.has(beneficio.id);
+
+    return (
+      <motion.div
+        key={beneficio.id}
+        className="bg-white rounded-2xl border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: index * 0.05 }}
+        whileHover={{ y: -4 }}
+      >
+        {/* Header del beneficio */}
+        <div className="p-6 pb-4">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              {beneficio.destacado && (
+                <div className="p-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl">
+                  <Star className="w-5 h-5 text-white" />
+                </div>
+              )}
+              <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl">
+                <Gift className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => toggleFavorite(beneficio.id)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isFavorite 
+                    ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-red-500'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+              </button>
+              
+              <button className="p-2 bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-blue-500 rounded-lg transition-colors">
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Origen del beneficio */}
+          <div className="flex items-center justify-between mb-3">
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${getOrigenColor(beneficio)}`}>
+              {getOrigenIcon(beneficio)}
+              <span className="ml-1">{getOrigenLabel(beneficio)}</span>
+            </div>
+            
+            {diasRestantes <= 7 && (
+              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                <Clock className="w-3 h-3 mr-1" />
+                {diasRestantes === 1 ? 'Último día' : `${diasRestantes} días`}
+              </div>
+            )}
+          </div>
+
+          <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-purple-600 transition-colors">
+            {beneficio.titulo}
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4 line-clamp-2">
+            {beneficio.descripcion}
+          </p>
+
+          {/* Información del descuento */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              {beneficio.tipo === 'porcentaje' && (
+                <div className="flex items-center space-x-1 text-green-600">
+                  <Percent className="w-5 h-5" />
+                  <span className="text-2xl font-bold">{beneficio.descuento}%</span>
+                  <span className="text-sm">OFF</span>
+                </div>
+              )}
+              
+              {beneficio.tipo === 'monto_fijo' && (
+                <div className="flex items-center space-x-1 text-green-600">
+                  <DollarSign className="w-5 h-5" />
+                  <span className="text-2xl font-bold">${beneficio.descuento}</span>
+                  <span className="text-sm">OFF</span>
+                </div>
+              )}
+              
+              {beneficio.tipo === 'producto_gratis' && (
+                <div className="flex items-center space-x-1 text-green-600">
+                  <Package className="w-5 h-5" />
+                  <span className="text-lg font-bold">GRATIS</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="text-right">
+              <div className="text-sm text-slate-500">en</div>
+              <div className="font-semibold text-slate-900">{beneficio.comercioNombre}</div>
+            </div>
+          </div>
+
+          {/* Información adicional */}
+          <div className="flex items-center justify-between text-sm text-slate-500 mb-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1">
+                <Tag className="w-4 h-4" />
+                <span>{beneficio.categoria}</span>
+              </div>
+              
+              <div className="flex items-center space-x-1">
+                <Calendar className="w-4 h-4" />
+                <span>Hasta {format(beneficio.fechaFin.toDate(), 'dd/MM', { locale: es })}</span>
+              </div>
+            </div>
+            
+            {beneficio.limiteTotal && (
+              <div className="text-xs bg-slate-100 px-2 py-1 rounded-full">
+                {beneficio.usosActuales}/{beneficio.limiteTotal} usos
+              </div>
+            )}
+          </div>
+
+          {/* Condiciones */}
+          {beneficio.condiciones && (
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs text-slate-600">{beneficio.condiciones}</p>
+            </div>
+          )}
+
+          {/* Tags */}
+          {beneficio.tags && beneficio.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-4">
+              {beneficio.tags.slice(0, 3).map((tag, tagIndex) => (
+                <span
+                  key={tagIndex}
+                  className="inline-block px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full"
+                >
+                  {tag}
+                </span>
+              ))}
+              {beneficio.tags.length > 3 && (
+                <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                  +{beneficio.tags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer con acciones */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-sm text-slate-500">
+              <Eye className="w-4 h-4" />
+              <span>{beneficio.usosActuales || 0} usos</span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              {userRole === 'socio' && onUse && (
+                <Button
+                  onClick={() => onUse(beneficio.id, beneficio.comercioId)}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Usar Beneficio
+                </Button>
+              )}
+              
+              {(userRole === 'comercio' || userRole === 'asociacion') && onEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => onEdit(beneficio)}
+                  className="px-4 py-2 rounded-xl"
+                >
+                  Editar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {/* Skeleton de filtros */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <div className="animate-pulse space-y-4">
+              <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+              <div className="flex space-x-4">
+                <div className="h-10 bg-slate-200 rounded-lg flex-1"></div>
+                <div className="h-10 bg-slate-200 rounded-lg w-32"></div>
+                <div className="h-10 bg-slate-200 rounded-lg w-32"></div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Skeleton de beneficios */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+              <div className="animate-pulse space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
+                  <div className="flex-1">
+                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-slate-200 rounded w-1/2 mt-2"></div>
+                  </div>
+                </div>
+                <div className="h-20 bg-slate-200 rounded-lg"></div>
+                <div className="flex justify-between">
+                  <div className="h-8 bg-slate-200 rounded w-20"></div>
+                  <div className="h-8 bg-slate-200 rounded w-24"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Header con controles */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Beneficios ({filteredBeneficios.length})
-          </h2>
-          
-          {hasActiveFilters && (
+    <div className="space-y-6">
+      {/* Filtros y controles */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Filtros y Búsqueda
+            </h2>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                className="p-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors"
+              >
+                {viewMode === 'grid' ? <List className="w-5 h-5" /> : <Grid className="w-5 h-5" />}
+              </button>
+              
+              {onRefresh && (
+                <button
+                  onClick={onRefresh}
+                  className="p-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Buscar beneficios..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Categoría */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+
+            {/* Ordenar por */}
+            <div className="flex items-center space-x-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="fecha">Fecha</option>
+                <option value="titulo">Título</option>
+                <option value="descuento">Descuento</option>
+                <option value="categoria">Categoría</option>
+                <option value="vencimiento">Vencimiento</option>
+              </select>
+              
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                {sortOrder === 'asc' ? <SortAsc className="w-5 h-5" /> : <SortDesc className="w-5 h-5" />}
+              </button>
+            </div>
+
+            {/* Filtros adicionales */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-colors ${
+                  showOnlyFavorites 
+                    ? 'bg-red-50 border-red-200 text-red-700' 
+                    : 'border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${showOnlyFavorites ? 'fill-current' : ''}`} />
+                <span className="text-sm">Favoritos</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Información de resultados */}
+          <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+            <span>
+              Mostrando {filteredBeneficios.length} de {beneficios.length} beneficios
+            </span>
+            
+            {(searchTerm || selectedCategory || showOnlyFavorites) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('');
+                  setShowOnlyFavorites(false);
+                }}
+                className="text-purple-600 hover:text-purple-700 font-medium"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Lista de beneficios */}
+      {filteredBeneficios.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-2xl flex items-center justify-center">
+            <Gift className="w-8 h-8 text-slate-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">
+            {searchTerm || selectedCategory || showOnlyFavorites 
+              ? 'No se encontraron beneficios' 
+              : 'No hay beneficios disponibles'
+            }
+          </h3>
+          <p className="text-slate-500 mb-4">
+            {searchTerm || selectedCategory || showOnlyFavorites
+              ? 'Intenta ajustar los filtros de búsqueda'
+              : 'Los beneficios aparecerán aquí cuando estén disponibles'
+            }
+          </p>
+          {(searchTerm || selectedCategory || showOnlyFavorites) && (
             <Button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('');
+                setShowOnlyFavorites(false);
+              }}
               variant="outline"
-              size="sm"
-              leftIcon={<X size={16} />}
-              onClick={clearFilters}
             >
               Limpiar filtros
             </Button>
           )}
         </div>
-
-        <div className="flex items-center gap-2">
-          {onRefresh && (
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<RefreshCw size={16} />}
-              onClick={onRefresh}
-            >
-              Actualizar
-            </Button>
-          )}
-
-          {onExport && (
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Download size={16} />}
-              onClick={onExport}
-            >
-              Exportar
-            </Button>
-          )}
-
-          {showCreateButton && onCreateNew && (
-            <Button
-              size="sm"
-              leftIcon={<Plus size={16} />}
-              onClick={onCreateNew}
-            >
-              Nuevo Beneficio
-            </Button>
-          )}
-
-          {/* Toggle de vista */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'grid' 
-                  ? 'bg-white text-indigo-600 shadow-sm' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Grid3X3 size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'list' 
-                  ? 'bg-white text-indigo-600 shadow-sm' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <List size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Barra de búsqueda y filtros */}
-      {showFilters && (
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Búsqueda */}
-            <div className="flex-1">
-              <Input
-                placeholder="Buscar beneficios..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search size={16} />}
-              />
-            </div>
-
-            {/* Filtros rápidos */}
-            <div className="flex gap-2">
-              <select
-                value={filters.categoria || ''}
-                onChange={(e) => setFilters(prev => ({ ...prev, categoria: e.target.value || undefined }))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="">Todas las categorías</option>
-                {CATEGORIAS_BENEFICIOS.map(categoria => (
-                  <option key={categoria} value={categoria}>{categoria}</option>
-                ))}
-              </select>
-
-              <select
-                value={filters.estado || ''}
-                onChange={(e) => setFilters(prev => ({ ...prev, estado: e.target.value || undefined }))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="">Todos los estados</option>
-                <option value="activo">Activos</option>
-                <option value="inactivo">Inactivos</option>
-                <option value="vencido">Vencidos</option>
-                <option value="agotado">Agotados</option>
-              </select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<SlidersHorizontal size={16} />}
-                onClick={() => setShowFilterPanel(!showFilterPanel)}
-              >
-                Más filtros
-              </Button>
-            </div>
-          </div>
-
-          {/* Panel de filtros avanzados */}
+      ) : (
+        <div className={viewMode === 'grid' 
+          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
+          : 'space-y-4'
+        }>
           <AnimatePresence>
-            {showFilterPanel && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-4 pt-4 border-t border-gray-200"
-              >
-                <div className="flex flex-wrap gap-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.soloDestacados || false}
-                      onChange={(e) => setFilters(prev => ({ 
-                        ...prev, 
-                        soloDestacados: e.target.checked || undefined 
-                      }))}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Solo destacados</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.soloNuevos || false}
-                      onChange={(e) => setFilters(prev => ({ 
-                        ...prev, 
-                        soloNuevos: e.target.checked || undefined 
-                      }))}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Solo nuevos</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.proximosAVencer || false}
-                      onChange={(e) => setFilters(prev => ({ 
-                        ...prev, 
-                        proximosAVencer: e.target.checked || undefined 
-                      }))}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Próximos a vencer</span>
-                  </label>
-                </div>
-              </motion.div>
+            {filteredBeneficios.map((beneficio, index) => 
+              viewMode === 'grid' 
+                ? renderBeneficioCard(beneficio, index)
+                : renderBeneficioListItem(beneficio, index)
             )}
           </AnimatePresence>
         </div>
       )}
 
-      {/* Lista de beneficios */}
-      <AnimatePresence mode="wait">
-        {loading ? (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' 
-                : 'grid-cols-1'
-            }`}
-          >
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-2xl border border-gray-100 p-6 animate-pulse"
-              >
-                <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <div className="h-6 bg-gray-200 rounded w-20"></div>
-                    <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  </div>
-                  <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-full"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                  <div className="flex gap-2">
-                    <div className="h-10 bg-gray-200 rounded w-24"></div>
-                    <div className="h-10 bg-gray-200 rounded w-20"></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        ) : filteredBeneficios.length > 0 ? (
-          <motion.div
-            key="beneficios"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' 
-                : 'grid-cols-1'
-            }`}
-          >
-            {filteredBeneficios.map((beneficio, index) => (
-              <motion.div
-                key={beneficio.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-              >
-                <BeneficioCard
-                  beneficio={beneficio}
-                  onUse={onUse}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onToggleStatus={onToggleStatus}
-                  view={viewMode}
-                  userRole={userRole}
-                />
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="text-center py-12"
-          >
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
-              <Search size={32} className="text-gray-400" />
+      {/* Información adicional para socios */}
+      {userRole === 'socio' && beneficios.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-200">
+          <div className="flex items-start space-x-4">
+            <div className="p-3 bg-blue-500 rounded-xl">
+              <Users className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No se encontraron beneficios
-            </h3>
-            <p className="text-gray-500 mb-4">
-              {hasActiveFilters 
-                ? 'Intenta ajustar los filtros o buscar con otros términos'
-                : 'No hay beneficios disponibles en este momento'
-              }
-            </p>
-            {hasActiveFilters && (
-              <Button variant="outline" onClick={clearFilters}>
-                Limpiar Filtros
-              </Button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 mb-2">
+                Sobre tus beneficios disponibles
+              </h3>
+              <div className="text-sm text-blue-700 space-y-1">
+                <p>• <strong>Asociación:</strong> Beneficios exclusivos de tu asociación</p>
+                <p>• <strong>Comercios Vinculados:</strong> Ofertas de comercios afiliados a tu asociación</p>
+                <p>• <strong>Públicos:</strong> Beneficios disponibles para todos los usuarios</p>
+                <p>• <strong>Acceso Directo:</strong> Ofertas especiales sin restricciones</p>
+              </div>
+              <div className="mt-3 text-xs text-blue-600">
+                💡 Los beneficios se actualizan automáticamente según tu membresía y afiliaciones
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  function renderBeneficioListItem(beneficio: Beneficio, index: number) {
+    const diasRestantes = Math.ceil(
+      (beneficio.fechaFin.toDate().getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    const isFavorite = favorites.has(beneficio.id);
+
+    return (
+      <motion.div
+        key={beneficio.id}
+        className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 p-6"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3, delay: index * 0.02 }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4 flex-1">
+            {/* Icono y origen */}
+            <div className="flex items-center space-x-2">
+              <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg">
+                <Gift className="w-5 h-5 text-white" />
+              </div>
+              {beneficio.destacado && (
+                <div className="p-1 bg-yellow-400 rounded-lg">
+                  <Star className="w-4 h-4 text-white" />
+                </div>
+              )}
+            </div>
+
+            {/* Información principal */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-2 mb-1">
+                <h3 className="font-semibold text-slate-900 truncate">{beneficio.titulo}</h3>
+                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getOrigenColor(beneficio)}`}>
+                  {getOrigenIcon(beneficio)}
+                  <span className="ml-1">{getOrigenLabel(beneficio)}</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-4 text-sm text-slate-500">
+                <span className="flex items-center space-x-1">
+                  <Building2 className="w-4 h-4" />
+                  <span>{beneficio.comercioNombre}</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <Tag className="w-4 h-4" />
+                  <span>{beneficio.categoria}</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <Calendar className="w-4 h-4" />
+                  <span>Hasta {format(beneficio.fechaFin.toDate(), 'dd/MM', { locale: es })}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Descuento */}
+            <div className="text-right">
+              {beneficio.tipo === 'porcentaje' && (
+                <div className="text-2xl font-bold text-green-600">
+                  {beneficio.descuento}% OFF
+                </div>
+              )}
+              {beneficio.tipo === 'monto_fijo' && (
+                <div className="text-2xl font-bold text-green-600">
+                  ${beneficio.descuento} OFF
+                </div>
+              )}
+              {beneficio.tipo === 'producto_gratis' && (
+                <div className="text-lg font-bold text-green-600">
+                  GRATIS
+                </div>
+              )}
+              
+              {diasRestantes <= 7 && (
+                <div className="text-xs text-red-600 mt-1">
+                  {diasRestantes === 1 ? 'Último día' : `${diasRestantes} días`}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div className="flex items-center space-x-2 ml-4">
+            <button
+              onClick={() => toggleFavorite(beneficio.id)}
+              className={`p-2 rounded-lg transition-colors ${
+                isFavorite 
+                  ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-red-500'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+            </button>
+
+            {userRole === 'socio' && onUse && (
+              <Button
+                onClick={() => onUse(beneficio.id, beneficio.comercioId)}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-medium"
+              >
+                Usar
+              </Button>
+            )}
+            
+            {(userRole === 'comercio' || userRole === 'asociacion') && onEdit && (
+              <Button
+                variant="outline"
+                onClick={() => onEdit(beneficio)}
+                className="px-4 py-2 rounded-lg"
+              >
+                Editar
+              </Button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 };

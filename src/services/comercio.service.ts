@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG } from '@/lib/constants';
+import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG, getCurrentUrl } from '@/lib/constants';
 import { handleError } from '@/lib/error-handler';
 import QRCode from 'qrcode';
 
@@ -106,6 +106,19 @@ class ComercioService {
   private readonly collection = COLLECTIONS.COMERCIOS;
   private readonly validacionesCollection = COLLECTIONS.VALIDACIONES;
   private readonly beneficiosCollection = COLLECTIONS.BENEFICIOS;
+
+  /**
+   * Get the correct base URL for QR generation
+   */
+  private getQRBaseUrl(): string {
+    // Try to get current URL if in browser
+    if (typeof window !== 'undefined') {
+      return getCurrentUrl();
+    }
+    
+    // Fallback to configured base URL
+    return QR_CONFIG.baseUrl;
+  }
 
   /**
    * Create new comercio
@@ -417,13 +430,15 @@ class ComercioService {
   }
 
   /**
-   * Generate QR Code for comercio - Enhanced CORS handling
+   * Generate QR Code for comercio - Enhanced with dynamic URL detection
    */
   async generateQRCode(comercioId: string, beneficioId?: string): Promise<string | null> {
     try {
-      // Create validation URL
-      const baseUrl = QR_CONFIG.baseUrl;
+      // Get the correct base URL dynamically
+      const baseUrl = this.getQRBaseUrl();
       const validationUrl = `${baseUrl}${QR_CONFIG.validationPath}?comercio=${comercioId}${beneficioId ? `&beneficio=${beneficioId}` : ''}`;
+
+      console.log('🔗 Generating QR with URL:', validationUrl);
 
       // Generate QR code as data URL (primary method - avoids CORS issues)
       const qrCodeDataURL = await QRCode.toDataURL(validationUrl, {
@@ -580,10 +595,10 @@ class ComercioService {
   }
 
   /**
-   * Generate QR validation URL
+   * Generate QR validation URL with dynamic base URL
    */
   generateQRValidationURL(comercioId: string, beneficioId?: string): string {
-    const baseUrl = QR_CONFIG.baseUrl;
+    const baseUrl = this.getQRBaseUrl();
     return `${baseUrl}${QR_CONFIG.validationPath}?comercio=${comercioId}${beneficioId ? `&beneficio=${beneficioId}` : ''}`;
   }
 

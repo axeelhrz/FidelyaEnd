@@ -176,15 +176,15 @@
     text-wrap: balance;
   }
   
-  /* Patrón de grid de fondo mejorado */
-  .bg-grid {
+  /* Patrón de grid de fondo mejorado - SOLO PARA CASOS ESPECÍFICOS */
+  .bg-grid-pattern {
     background-image: 
       radial-gradient(circle at 1px 1px, rgba(135, 206, 235, 0.15) 1px, transparent 0),
       radial-gradient(circle at 20px 20px, rgba(135, 206, 235, 0.1) 1px, transparent 0);
     background-size: 20px 20px, 40px 40px;
   }
   
-  .dark .bg-grid {
+  .dark .bg-grid-pattern {
     background-image: 
       radial-gradient(circle at 1px 1px, rgba(135, 206, 235, 0.1) 1px, transparent 0),
       radial-gradient(circle at 20px 20px, rgba(135, 206, 235, 0.05) 1px, transparent 0);
@@ -250,13 +250,25 @@
     -webkit-mask-image: radial-gradient(circle, black 0%, transparent 70%);
   }
   
-  /* Contenedores principales mejorados */
+  /* Contenedores principales mejorados - FONDO LISO PARA ASOCIACIÓN */
   .dashboard-container {
-    @apply min-h-screen bg-gradient-to-br from-sky-50 via-celestial-50/30 to-sky-100/50;
+    @apply min-h-screen bg-gradient-to-br from-slate-50 to-slate-100;
   }
   
   .dark .dashboard-container {
     @apply from-slate-900 via-slate-800/30 to-slate-900/50;
+  }
+  
+  /* Contenedor específico para páginas de asociación - FONDO LISO */
+  .asociacion-page-container {
+    @apply min-h-screen bg-gradient-to-br from-slate-50 to-slate-100;
+    /* Asegurar que no haya patrones de fondo */
+    background-image: none !important;
+  }
+  
+  .dark .asociacion-page-container {
+    @apply from-slate-900 to-slate-800;
+    background-image: none !important;
   }
   
   /* Estados de componentes */
@@ -634,7 +646,7 @@
   background-clip: text;
 }
 
-/* Grid background */
+/* Grid background - RENOMBRADO PARA EVITAR CONFLICTOS */
 .bg-grid {
   background-image: 
     linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),

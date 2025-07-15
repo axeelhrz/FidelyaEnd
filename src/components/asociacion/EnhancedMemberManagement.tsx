@@ -1,499 +1,567 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Users,
-  Plus,
   Search,
   Filter,
+  Plus,
   Download,
   Upload,
-  Check,
-  AlertTriangle,
-  TrendingUp,
-  Store,
-  BarChart3,
-  ArrowRight,
-  Eye,
-  Edit,
-  Trash2,
-  UserPlus,
-  UserX,
   RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  X,
+  Settings,
+  User,
+  DollarSign
 } from 'lucide-react';
 import { useSocios } from '@/hooks/useSocios';
+import { useSocioAsociacion } from '@/hooks/useSocioAsociacion';
 import { SocioDialog } from './SocioDialog';
-import { AddRegisteredSocioDialog } from './AddRegisteredSocioDialog';
-import { SocioProfileView } from './SocioProfileView';
-import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { SocioFormData, Socio } from '@/types/socio';
+import { AddRegisteredSocioButton } from './AddRegisteredSocioButton';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore';
+import { Socio, SocioFormData } from '@/types/socio';
+import toast from 'react-hot-toast';
+import Image from 'next/image';
 
-interface EnhancedMemberManagementProps {
-  onNavigate?: (section: string) => void;
-  initialFilter?: string | null;
-}
+export const EnhancedMemberManagement = () => {
+  const { 
+    socios, 
+    loading, 
+    error, 
+    stats,
+    loadSocios,
+    createSocio,
+    updateSocio,
+    importSocios
+  } = useSocios();
 
-export const EnhancedMemberManagement: React.FC<EnhancedMemberManagementProps> = ({ 
-  onNavigate, 
-  initialFilter 
-}) => {
-  // Ensure socios are typed as '@/types/socio' Socio
-  const { socios: rawSocios, stats, loading, createSocio, updateSocio, deleteSocio, updateMembershipStatus } = useSocios();
-  // Map socios to ensure they have uid and asociacion (add defaults if missing)
-  const socios: Socio[] = ((rawSocios as unknown) as Socio[]).map((socio) => ({
-    ...socio,
-    uid: socio.uid ?? '',
-    asociacion: socio.asociacion ?? '',
-  }));
-  
+  const {
+    loadSocios: loadVinculados,
+    desvincularSocio
+  } = useSocioAsociacion();
+
+  // Estados locales
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEstado, setSelectedEstado] = useState('');
-  const [selectedEstadoMembresia, setSelectedEstadoMembresia] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [socioDialogOpen, setSocioDialogOpen] = useState(false);
-  const [addRegisteredDialogOpen, setAddRegisteredDialogOpen] = useState(false);
-  const [profileViewOpen, setProfileViewOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    estado: '',
+    estadoMembresia: '',
+    fechaDesde: '',
+    fechaHasta: ''
+  });
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSocio, setSelectedSocio] = useState<Socio | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Apply initial filter from URL parameters
+  // Cargar datos iniciales
   useEffect(() => {
-    if (initialFilter) {
-      switch (initialFilter) {
-        case 'activos':
-          setSelectedEstado('activo');
-          setSelectedEstadoMembresia('');
-          break;
-        case 'vencidos':
-          setSelectedEstado('');
-          setSelectedEstadoMembresia('vencido');
-          break;
-        default:
-          setSelectedEstado('');
-          setSelectedEstadoMembresia('');
-          break;
-      }
+    loadSocios();
+    loadVinculados();
+  }, [loadSocios, loadVinculados]);
+
+  // Función para refrescar datos
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadSocios(), loadVinculados()]);
+      toast.success('Datos actualizados');
+    } catch {
+      toast.error('Error al actualizar los datos');
+    } finally {
+      setRefreshing(false);
     }
-  }, [initialFilter]);
+  };
+
+  // Función para convertir fechas a formato compatible
+  const convertDateToTimestamp = (date: Date | Timestamp | string | undefined): Timestamp | undefined => {
+    if (!date) return undefined;
+    
+    if (date instanceof Date) {
+      return Timestamp.fromDate(date);
+    }
+    
+    if (date instanceof Timestamp) {
+      return date;
+    }
+    
+    if (typeof date === 'string') {
+      return Timestamp.fromDate(new Date(date));
+    }
+    
+    return undefined;
+  };
+
+  // Función para crear/actualizar socio
+  const handleSaveSocio = async (data: SocioFormData) => {
+    try {
+      // Convertir fechas al formato correcto
+      const processedData: SocioFormData = {
+        ...data,
+        fechaNacimiento: convertDateToTimestamp(data.fechaNacimiento),
+        fechaVencimiento: convertDateToTimestamp(data.fechaVencimiento)
+      };
+
+      if (selectedSocio) {
+        await updateSocio(selectedSocio.id, processedData);
+        toast.success('Socio actualizado exitosamente');
+      } else {
+        await createSocio(processedData);
+        toast.success('Socio creado exitosamente');
+      }
+      await handleRefresh();
+    } catch {
+      toast.error('Error al guardar el socio');
+    }
+  };
+
+  // Función para eliminar socio
+
+
+  // Función para desvincular socio
+  const handleDesvincularSocio = async (socioId: string) => {
+    if (!confirm('¿Estás seguro de que deseas desvincular este socio?')) return;
+
+    try {
+      await desvincularSocio(socioId);
+      toast.success('Socio desvinculado exitosamente');
+      await handleRefresh();
+    } catch {
+      toast.error('Error al desvincular el socio');
+    }
+  };
+
+  // Función para exportar datos a CSV
+  const handleExport = async () => {
+    try {
+      if (socios.length === 0) {
+        toast.error('No hay socios para exportar');
+        return;
+      }
+
+      // Crear encabezados CSV
+      const headers = [
+        'Nombre',
+        'Email',
+        'DNI',
+        'Teléfono',
+        'Número de Socio',
+        'Estado',
+        'Estado Membresía',
+        'Fecha de Ingreso',
+        'Fecha de Vencimiento',
+        'Monto Cuota',
+        'Beneficios Usados'
+      ];
+
+      // Convertir datos a formato CSV
+      const csvData = socios.map(socio => [
+        socio.nombre,
+        socio.email,
+        socio.dni,
+        socio.telefono || '',
+        socio.numeroSocio || '',
+        socio.estado,
+        socio.estadoMembresia,
+        format(socio.fechaIngreso.toDate(), 'dd/MM/yyyy'),
+        socio.fechaVencimiento ? format(socio.fechaVencimiento.toDate(), 'dd/MM/yyyy') : '',
+        socio.montoCuota || 0,
+        socio.beneficiosUsados || 0
+      ]);
+
+      // Crear contenido CSV
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => row.map(field => `"${field}"`).join(','))
+      ].join('\n');
+
+      // Crear y descargar archivo
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `socios_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Datos exportados exitosamente');
+    } catch {
+      toast.error('Error al exportar los datos');
+    }
+  };
+
+  // Función para importar datos
+  const handleImport = async (file: File) => {
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast.error('El archivo CSV debe tener al menos una fila de datos');
+        return;
+      }
+
+      // Parsear CSV simple (asumiendo formato estándar)
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const sociosData = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const socio: SocioFormData = {} as SocioFormData;
+        
+        headers.forEach((header, idx) => {
+          const value = values[idx] || '';
+          switch (header.toLowerCase()) {
+            case 'nombre':
+              socio.nombre = value;
+              break;
+            case 'email':
+              socio.email = value;
+              break;
+            case 'dni':
+              socio.dni = value;
+              break;
+            case 'telefono':
+            case 'teléfono':
+              socio.telefono = value;
+              break;
+            case 'numero de socio':
+            case 'número de socio':
+              socio.numeroSocio = value;
+              break;
+            case 'estado':
+              socio.estado = (value as SocioFormData['estado']) || 'activo';
+              break;
+            case 'monto cuota':
+              socio.montoCuota = parseFloat(value) || 0;
+              break;
+            default:
+              if (header in socio) {
+                ((socio as unknown) as Record<string, unknown>)[header] = value;
+              }
+          }
+        });
+        
+        return socio;
+      });
+
+      await importSocios(sociosData);
+      toast.success('Datos importados exitosamente');
+      await handleRefresh();
+    } catch {
+      toast.error('Error al importar los datos');
+    }
+  };
 
   // Filtrar socios
-  const sociosFiltrados = socios.filter(socio => {
-    const matchesSearch = !searchTerm || 
+  const filteredSocios = socios.filter(socio => {
+    const matchesSearch = 
       socio.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       socio.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      socio.dni?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      socio.numeroSocio?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesEstado = !selectedEstado || socio.estado === selectedEstado;
-    const matchesEstadoMembresia = !selectedEstadoMembresia || socio.estadoMembresia === selectedEstadoMembresia;
-    
-    return matchesSearch && matchesEstado && matchesEstadoMembresia;
+      (socio.dni && socio.dni.includes(searchTerm)) ||
+      (socio.numeroSocio && socio.numeroSocio.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesEstado = !filters.estado || socio.estado === filters.estado;
+    const matchesMembresia = !filters.estadoMembresia || socio.estadoMembresia === filters.estadoMembresia;
+
+    let matchesFecha = true;
+    if (filters.fechaDesde || filters.fechaHasta) {
+      const fechaIngreso = socio.fechaIngreso.toDate();
+      if (filters.fechaDesde && new Date(filters.fechaDesde) > fechaIngreso) {
+        matchesFecha = false;
+      }
+      if (filters.fechaHasta && new Date(filters.fechaHasta) < fechaIngreso) {
+        matchesFecha = false;
+      }
+    }
+
+    return matchesSearch && matchesEstado && matchesMembresia && matchesFecha;
   });
 
-  // Get filtered title based on current filters
-  const getFilteredTitle = () => {
-    if (selectedEstado === 'activo' && !selectedEstadoMembresia) {
-      return 'Socios Activos';
-    } else if (selectedEstadoMembresia === 'vencido' && !selectedEstado) {
-      return 'Socios Vencidos';
-    } else if (selectedEstado || selectedEstadoMembresia || searchTerm) {
-      return 'Socios Filtrados';
-    }
-    return 'Lista de Socios';
-  };
+  // Renderizar estado de carga
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando socios...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleCreateSocio = async (data: SocioFormData) => {
-    try {
-      const cleanData = {
-        nombre: data.nombre,
-        email: data.email,
-        estado: data.estado,
-        dni: data.dni || '',
-        telefono: data.telefono || '',
-        direccion: '',
-        fechaNacimiento: data.fechaNacimiento || new Date(),
-        montoCuota: data.montoCuota || 0,
-        numeroSocio: data.numeroSocio || '',
-        fechaVencimiento: data.fechaVencimiento,
-      };
-      
-      const success = await createSocio(cleanData);
-      
-      if (success) {
-        setSocioDialogOpen(false);
-        setSelectedSocio(null);
-        setIsEditing(false);
-      }
-    } catch (error) {
-      console.error('Error creating socio:', error);
-    }
-  };
-
-  const handleUpdateSocio = async (data: SocioFormData) => {
-    if (!selectedSocio) return;
-    
-    try {
-      const success = await updateSocio(selectedSocio.id, data);
-      
-      if (success) {
-        setSocioDialogOpen(false);
-        setSelectedSocio(null);
-        setIsEditing(false);
-      }
-    } catch (error) {
-      console.error('Error updating socio:', error);
-    }
-  };
-
-  const handleAddRegisteredSocio = async (userData: {
-    nombre: string;
-    email: string;
-    telefono?: string;
-    dni?: string;
-    estado: 'activo' | 'vencido';
-  }) => {
-    try {
-      const socioData = {
-        nombre: userData.nombre,
-        email: userData.email,
-        estado: userData.estado,
-        dni: userData.dni || '',
-        telefono: userData.telefono || '',
-        direccion: '',
-        fechaNacimiento: new Date(),
-        montoCuota: 0,
-        numeroSocio: '',
-      };
-      
-      const success = await createSocio(socioData);
-      
-      if (success) {
-        setAddRegisteredDialogOpen(false);
-      }
-      
-      return success;
-    } catch (error) {
-      console.error('Error adding registered socio:', error);
-      return false;
-    }
-  };
-
-  const handleOpenDialog = () => {
-    setSelectedSocio(null);
-    setIsEditing(false);
-    setSocioDialogOpen(true);
-  };
-
-  const handleEditSocio = (socio: Socio) => {
-    setSelectedSocio(socio);
-    setIsEditing(true);
-    setSocioDialogOpen(true);
-  };
-
-  const handleViewSocio = (socio: Socio) => {
-    setSelectedSocio(socio);
-    setProfileViewOpen(true);
-  };
-
-  const handleDeleteSocio = (socio: Socio) => {
-    setSelectedSocio(socio);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!selectedSocio) return;
-    
-    try {
-      const success = await deleteSocio(selectedSocio.id);
-      
-      if (success) {
-        setDeleteDialogOpen(false);
-        setSelectedSocio(null);
-      }
-    } catch (error) {
-      console.error('Error deleting socio:', error);
-    }
-  };
-
-  const handleToggleStatus = async (socio: Socio) => {
-    const newStatus = socio.estado === 'activo' ? 'inactivo' : 'activo';
-    
-    try {
-      const success = await updateSocio(socio.id, { estado: newStatus } as Partial<SocioFormData>);
-      
-      if (success) {
-        // Refresh will happen automatically through the hook
-      }
-    } catch (error) {
-      console.error('Error toggling socio status:', error);
-    }
-  };
-
-  const handleUpdateMembershipStatuses = async () => {
-    try {
-      await updateMembershipStatus();
-    } catch (error) {
-      console.error('Error updating membership statuses:', error);
-    }
-  };
+  // Renderizar estado de error
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Error al cargar los socios</h3>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <button
+          onClick={handleRefresh}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+        >
+          <RefreshCw className="w-5 h-5 mr-2" />
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header con navegación rápida */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{getFilteredTitle()}</h1>
-          <p className="text-gray-600 mt-2">
-            {initialFilter === 'activos' 
-              ? 'Miembros con estado activo en la asociación'
-              : initialFilter === 'vencidos'
-              ? 'Miembros con membresía vencida que requieren atención'
-              : 'Administra los miembros de tu asociación'
-            }
-          </p>
-          {sociosFiltrados.length !== socios.length && (
-            <p className="text-sm text-blue-600 mt-1">
-              Mostrando {sociosFiltrados.length} de {socios.length} socios
-            </p>
-          )}
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          {onNavigate && (
-            <button
-              onClick={() => onNavigate('comercios')}
-              className="inline-flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
-            >
-              <Store className="w-4 h-4 mr-2" />
-              Ir a Comercios
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </button>
-          )}
-          
-          <button
-            onClick={handleUpdateMembershipStatuses}
-            className="inline-flex items-center px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Actualizar Estados
-          </button>
-          
-          <button
-            onClick={() => setAddRegisteredDialogOpen(true)}
-            className="inline-flex items-center px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Agregar Registrado
-          </button>
-          
-          <button
-            onClick={handleOpenDialog}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nuevo Socio
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Socios</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <p className="text-sm text-gray-600">Total Socios</p>
+              <p className="text-2xl font-bold text-gray-900">{stats?.total || 0}</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
+            <Users className="w-8 h-8 text-purple-500" />
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Socios Activos</p>
-              <p className="text-2xl font-bold text-green-600">{stats.activos}</p>
+              <p className="text-sm text-gray-600">Socios Activos</p>
+              <p className="text-2xl font-bold text-green-600">{stats?.activos || 0}</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Check className="w-6 h-6 text-green-600" />
-            </div>
+            <CheckCircle className="w-8 h-8 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Membresías Vencidas</p>
-              <p className="text-2xl font-bold text-red-600">{stats.vencidos}</p>
+              <p className="text-sm text-gray-600">Socios Vencidos</p>
+              <p className="text-2xl font-bold text-red-600">{stats?.vencidos || 0}</p>
             </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
-            </div>
+            <Clock className="w-8 h-8 text-red-500" />
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Ingresos Mensuales</p>
-              <p className="text-2xl font-bold text-purple-600">
-                ${(stats.activos * 50).toLocaleString()}
+              <p className="text-sm text-gray-600">Ingresos Mensuales</p>
+              <p className="text-2xl font-bold text-blue-600">
+                ${(stats?.ingresosMensuales || 0).toLocaleString()}
               </p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
-            </div>
+            <DollarSign className="w-8 h-8 text-blue-500" />
           </div>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+      {/* Controles */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Búsqueda */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Buscar socios..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
 
-          <div className="flex items-center space-x-3">
+          {/* Acciones */}
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
                 showFilters 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-purple-50 border-purple-200 text-purple-700' 
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <Filter className="w-4 h-4 mr-2" />
+              <Filter className="w-4 h-4" />
               Filtros
             </button>
 
-            <button
-              onClick={() => onNavigate?.('socios-importar')}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Importar
-            </button>
+            <AddRegisteredSocioButton 
+              onSocioAdded={handleRefresh}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            />
 
             <button
-              onClick={() => onNavigate?.('socios-exportar')}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+              onClick={() => {
+                setSelectedSocio(null);
+                setDialogOpen(true);
+              }}
+              className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
             >
-              <Download className="w-4 h-4 mr-2" />
-              Exportar
+              <Plus className="w-4 h-4" />
+              Nuevo Socio
             </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExport}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Exportar datos"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={() => document.getElementById('import-file')?.click()}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Importar datos"
+              >
+                <Upload className="w-5 h-5" />
+              </button>
+              <input
+                id="import-file"
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handleImport(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                title="Actualizar datos"
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Advanced Filters */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4 pt-4 border-t border-gray-200"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estado del Socio
-                  </label>
-                  <select
-                    value={selectedEstado}
-                    onChange={(e) => setSelectedEstado(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="activo">Activo</option>
-                    <option value="inactivo">Inactivo</option>
-                    <option value="suspendido">Suspendido</option>
-                    <option value="pendiente">Pendiente</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estado de Membresía
-                  </label>
-                  <select
-                    value={selectedEstadoMembresia}
-                    onChange={(e) => setSelectedEstadoMembresia(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="al_dia">Al día</option>
-                    <option value="vencido">Vencido</option>
-                    <option value="pendiente">Pendiente</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedEstado('');
-                    setSelectedEstadoMembresia('');
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-800"
+        {/* Filtros */}
+        {showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="mt-4 pt-4 border-t border-gray-200"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado
+                </label>
+                <select
+                  value={filters.estado}
+                  onChange={(e) => setFilters(prev => ({ ...prev, estado: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 >
-                  Limpiar filtros
-                </button>
+                  <option value="">Todos</option>
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                  <option value="suspendido">Suspendido</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado de Membresía
+                </label>
+                <select
+                  value={filters.estadoMembresia}
+                  onChange={(e) => setFilters(prev => ({ ...prev, estadoMembresia: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="">Todos</option>
+                  <option value="al_dia">Al día</option>
+                  <option value="vencido">Vencido</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha Desde
+                </label>
+                <input
+                  type="date"
+                  value={filters.fechaDesde}
+                  onChange={(e) => setFilters(prev => ({ ...prev, fechaDesde: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha Hasta
+                </label>
+                <input
+                  type="date"
+                  value={filters.fechaHasta}
+                  onChange={(e) => setFilters(prev => ({ ...prev, fechaHasta: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  setFilters({
+                    estado: '',
+                    estadoMembresia: '',
+                    fechaDesde: '',
+                    fechaHasta: ''
+                  });
+                  setSearchTerm('');
+                }}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* Socios List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Cargando socios...</span>
-          </div>
-        ) : sociosFiltrados.length === 0 ? (
+      {/* Lista de Socios */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {filteredSocios.length === 0 ? (
           <div className="text-center py-12">
-            <Users className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              {socios.length === 0 ? 'No hay socios registrados' : 'No se encontraron socios'}
+            <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {socios.length === 0 ? 'No hay socios vinculados' : 'No se encontraron socios'}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="text-gray-600 mb-4">
               {socios.length === 0 
-                ? 'Comienza agregando tu primer socio.'
-                : 'Intenta ajustar los filtros de búsqueda.'
+                ? 'Comienza vinculando socios existentes o creando nuevos'
+                : 'Intenta ajustar los filtros de búsqueda'
               }
             </p>
             {socios.length === 0 && (
-              <div className="mt-6 space-y-3">
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <button
-                    onClick={handleOpenDialog}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Nuevo Socio
-                  </button>
-                  
-                  <button
-                    onClick={() => setAddRegisteredDialogOpen(true)}
-                    className="inline-flex items-center px-4 py-2 border border-emerald-300 shadow-sm text-sm font-medium rounded-md text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Agregar Usuario Registrado
-                  </button>
-                </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <AddRegisteredSocioButton 
+                  onSocioAdded={handleRefresh}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                />
+                <button
+                  onClick={() => {
+                    setSelectedSocio(null);
+                    setDialogOpen(true);
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crear Nuevo Socio
+                </button>
               </div>
             )}
           </div>
@@ -506,7 +574,7 @@ export const EnhancedMemberManagement: React.FC<EnhancedMemberManagementProps> =
                     Socio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contacto
+                    Número
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
@@ -515,122 +583,104 @@ export const EnhancedMemberManagement: React.FC<EnhancedMemberManagementProps> =
                     Membresía
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha Ingreso
+                    Fecha de Ingreso
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vencimiento
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sociosFiltrados.map((socio) => (
-                  <motion.tr
-                    key={socio.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-gray-50"
-                  >
+                {filteredSocios.map((socio) => (
+                  <tr key={socio.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
-                          <span className="text-white font-semibold text-sm">
-                            {socio.nombre.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                        {socio.avatar ? (
+                          <Image
+                            className="h-10 w-10 rounded-full"
+                            src={socio.avatar}
+                            alt={socio.nombre}
+                            width={40}
+                            height={40}
+                            style={{ objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                            <User className="h-6 w-6 text-purple-600" />
+                          </div>
+                        )}
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
                             {socio.nombre}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {socio.numeroSocio ? `#${socio.numeroSocio}` : 'Sin número'}
+                            {socio.email}
                           </div>
                         </div>
                       </div>
                     </td>
-                    
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{socio.email}</div>
-                      <div className="text-sm text-gray-500">
-                        {socio.telefono || 'Sin teléfono'}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {socio.numeroSocio || '-'}
                     </td>
-                    
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        socio.estado === 'activo' 
-                          ? 'bg-green-100 text-green-800' 
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        socio.estado === 'activo'
+                          ? 'bg-green-100 text-green-800'
                           : socio.estado === 'inactivo'
                           ? 'bg-gray-100 text-gray-800'
                           : socio.estado === 'suspendido'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {socio.estado === 'activo' ? 'Activo' : 
-                         socio.estado === 'inactivo' ? 'Inactivo' :
-                         socio.estado === 'suspendido' ? 'Suspendido' : 'Pendiente'}
+                        {socio.estado.charAt(0).toUpperCase() + socio.estado.slice(1)}
                       </span>
                     </td>
-
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        socio.estadoMembresia === 'al_dia' 
-                          ? 'bg-green-100 text-green-800' 
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        socio.estadoMembresia === 'al_dia'
+                          ? 'bg-green-100 text-green-800'
                           : socio.estadoMembresia === 'vencido'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {socio.estadoMembresia === 'al_dia' ? 'Al día' : 
-                         socio.estadoMembresia === 'vencido' ? 'Vencido' : 'Pendiente'}
+                        {socio.estadoMembresia === 'al_dia'
+                          ? 'Al día'
+                          : socio.estadoMembresia.charAt(0).toUpperCase() + socio.estadoMembresia.slice(1)}
                       </span>
                     </td>
-                    
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {(socio.creadoEn instanceof Date
-                        ? socio.creadoEn
-                        : socio.creadoEn.toDate()
-                      ).toLocaleDateString()}
+                      {format(socio.fechaIngreso.toDate(), 'dd/MM/yyyy', { locale: es })}
                     </td>
-                    
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {socio.fechaVencimiento
+                        ? format(socio.fechaVencimiento.toDate(), 'dd/MM/yyyy', { locale: es })
+                        : '-'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => handleViewSocio(socio)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Ver perfil completo"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        
-                        <button
-                          onClick={() => handleEditSocio(socio)}
-                          className="text-indigo-600 hover:text-indigo-900"
+                          onClick={() => {
+                            setSelectedSocio(socio);
+                            setDialogOpen(true);
+                          }}
+                          className="text-purple-600 hover:text-purple-900"
                           title="Editar socio"
                         >
-                          <Edit size={16} />
+                          <Settings className="w-5 h-5" />
                         </button>
-                        
                         <button
-                          onClick={() => handleToggleStatus(socio)}
-                          className={`${
-                            socio.estado === 'activo' 
-                              ? 'text-orange-600 hover:text-orange-900' 
-                              : 'text-green-600 hover:text-green-900'
-                          }`}
-                          title={socio.estado === 'activo' ? 'Desactivar socio' : 'Activar socio'}
-                        >
-                          {socio.estado === 'activo' ? <UserX size={16} /> : <UserPlus size={16} />}
-                        </button>
-                        
-                        <button
-                          onClick={() => handleDeleteSocio(socio)}
+                          onClick={() => handleDesvincularSocio(socio.id)}
                           className="text-red-600 hover:text-red-900"
-                          title="Eliminar socio"
+                          title="Desvincular socio"
                         >
-                          <Trash2 size={16} />
+                          <X className="w-5 h-5" />
                         </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -638,108 +688,12 @@ export const EnhancedMemberManagement: React.FC<EnhancedMemberManagementProps> =
         )}
       </div>
 
-      {/* Quick Actions Panel */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
-            onClick={handleOpenDialog}
-            className="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200"
-          >
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-              <Plus className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-gray-900">Nuevo Socio</div>
-              <div className="text-xs text-gray-500">Crear desde cero</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setAddRegisteredDialogOpen(true)}
-            className="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200"
-          >
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center mr-3">
-              <UserPlus className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-gray-900">Agregar Registrado</div>
-              <div className="text-xs text-gray-500">Usuario existente</div>
-            </div>
-          </button>
-
-          <button
-            onClick={handleUpdateMembershipStatuses}
-            className="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200"
-          >
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-              <RefreshCw className="w-5 h-5 text-orange-600" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-gray-900">Actualizar Estados</div>
-              <div className="text-xs text-gray-500">Membresías vencidas</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigate?.('analytics')}
-            className="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200"
-          >
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-              <BarChart3 className="w-5 h-5 text-purple-600" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-gray-900">Ver Analytics</div>
-              <div className="text-xs text-gray-500">Métricas detalladas</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Dialogs */}
+      {/* Diálogo de Socio */}
       <SocioDialog
-        open={socioDialogOpen}
-        onClose={() => {
-          setSocioDialogOpen(false);
-          setSelectedSocio(null);
-          setIsEditing(false);
-        }}
-        onSave={isEditing ? handleUpdateSocio : handleCreateSocio}
-        socio={isEditing ? selectedSocio : null}
-      />
-
-      <AddRegisteredSocioDialog
-        open={addRegisteredDialogOpen}
-        onClose={() => setAddRegisteredDialogOpen(false)}
-        onAddSocio={handleAddRegisteredSocio}
-      />
-
-      {selectedSocio && (
-        <SocioProfileView
-          socio={selectedSocio}
-          open={profileViewOpen}
-          onClose={() => {
-            setProfileViewOpen(false);
-            setSelectedSocio(null);
-          }}
-          onEdit={handleEditSocio}
-          onRefresh={() => {
-            // Refresh will happen automatically through the hook
-          }}
-        />
-      )}
-
-      <DeleteConfirmDialog
-        open={deleteDialogOpen}
-        onClose={() => {
-          setDeleteDialogOpen(false);
-          setSelectedSocio(null);
-        }}
-        onConfirm={handleConfirmDelete}
-        title="Eliminar Socio"
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        message={`¿Estás seguro de que deseas eliminar al socio "${selectedSocio?.nombre}"? Esta acción marcará al socio como inactivo.`}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSave={handleSaveSocio}
+        socio={selectedSocio}
       />
     </div>
   );

@@ -32,7 +32,7 @@ export interface SocioConfiguration {
 
 export interface SocioActivity {
   id: string;
-  tipo: 'beneficio' | 'validacion' | 'registro' | 'actualizacion' | 'configuracion';
+  tipo: 'beneficio' | 'validacion' | 'registro' | 'actualizacion' | 'configuracion' | 'vinculacion' | 'desvinculacion';
   titulo: string;
   descripcion: string;
   fecha: Timestamp;
@@ -41,6 +41,8 @@ export interface SocioActivity {
     comercioNombre?: string;
     beneficioId?: string;
     beneficioNombre?: string;
+    asociacionId?: string;
+    asociacionNombre?: string;
     montoDescuento?: number;
     categoria?: string;
     ubicacion?: string;
@@ -130,6 +132,12 @@ export interface Socio {
     descuentoAdicional: number;
   };
   pagos?: Pago[];
+  
+  // Relaciones bidireccionales con asociaciones
+  asociaciones?: string[]; // IDs de asociaciones vinculadas
+  asociacionPrincipal?: string; // ID de la asociación principal
+  fechaVinculacion?: Timestamp; // Fecha de vinculación a la asociación actual
+  vinculadoPor?: string; // ID del usuario que realizó la vinculación
 }
 
 // Tipo simplificado para el formulario de creación/edición de socios
@@ -144,6 +152,7 @@ export interface SocioFormData {
   montoCuota?: number;
   fechaVencimiento?: Date | Timestamp;
   numeroSocio?: string;
+  asociacionId?: string;
 }
 
 export interface SocioStats {
@@ -152,6 +161,7 @@ export interface SocioStats {
   activos: number;
   vencidos: number;
   inactivos: number;
+  ingresosMensuales?: number;
   
   // Estadísticas detalladas para perfil individual
   beneficiosUsados?: number;
@@ -199,6 +209,39 @@ export interface SocioAsociacion {
   comerciosAfiliados: number;
 }
 
+// Tipos para la vinculación bidireccional
+export interface VinculacionSocioAsociacion {
+  socioId: string;
+  asociacionId: string;
+  fechaVinculacion: Timestamp;
+  vinculadoPor: string; // UID del usuario que realizó la vinculación
+  estado: 'activo' | 'inactivo' | 'pendiente';
+  tipo: 'principal' | 'secundaria'; // Tipo de vinculación
+  metadata?: {
+    numeroSocio?: string;
+    montoCuota?: number;
+    fechaVencimiento?: Timestamp;
+    observaciones?: string;
+  };
+}
+
+export interface SocioVinculado {
+  id: string;
+  nombre: string;
+  email: string;
+  dni?: string;
+  telefono?: string;
+  numeroSocio?: string;
+  estado: 'activo' | 'inactivo' | 'pendiente' | 'suspendido' | 'vencido';
+  estadoMembresia: string;
+  fechaVinculacion: Timestamp;
+  vinculadoPor: string;
+  avatar?: string;
+  asociacionId: string;
+  montoCuota?: number;
+  fechaVencimiento?: Timestamp;
+}
+
 // Tipos para formularios y actualizaciones
 export interface UpdateSocioProfileData {
   nombre?: string;
@@ -215,6 +258,7 @@ export interface SocioActivityFilter {
   fechaDesde?: Date;
   fechaHasta?: Date;
   comercioId?: string;
+  asociacionId?: string;
   limit?: number;
   offset?: number;
 }
@@ -227,4 +271,24 @@ export interface SocioDataExport {
   actividad: SocioActivity[];
   configuracion: SocioConfiguration;
   fechaExportacion: Timestamp;
+}
+
+// Tipos para búsqueda y filtrado de socios
+export interface SocioSearchFilters {
+  nombre?: string;
+  email?: string;
+  dni?: string;
+  estado?: Socio['estado'][];
+  estadoMembresia?: string[];
+  asociacionId?: string;
+  fechaIngresoDesde?: Date;
+  fechaIngresoHasta?: Date;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SocioSearchResult {
+  socios: Socio[];
+  total: number;
+  hasMore: boolean;
 }

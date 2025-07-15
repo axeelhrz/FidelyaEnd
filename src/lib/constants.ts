@@ -18,12 +18,30 @@ export const COLLECTIONS = {
 // Export type for collection names
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];
 
+// Helper function to get the correct base URL
+const getBaseUrl = (): string => {
+  // In production, use the environment variable or Vercel URL
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      return process.env.NEXT_PUBLIC_APP_URL;
+    }
+    if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+      return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+    }
+    // Fallback for production
+    return 'https://fidelya.vercel.app';
+  }
+  
+  // In development, use localhost
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+};
+
 // App configuration
 export const APP_CONFIG = {
   name: 'Fidelya',
   version: '1.0.0',
   description: 'Sistema de Gestión de Socios y Beneficios',
-  url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
+  url: getBaseUrl(),
   supportEmail: 'soporte@fidelya.com',
   maxFileSize: 5 * 1024 * 1024, // 5MB
   allowedImageTypes: ['image/jpeg', 'image/png', 'image/webp'],
@@ -47,6 +65,7 @@ export const STORAGE_CONFIG = {
     'https://127.0.0.1:3001',
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null,
+    'https://fidelya.vercel.app',
   ].filter(Boolean),
   // Enhanced fallback strategies for CORS issues
   useDataUrlFallback: true,
@@ -108,7 +127,7 @@ export const DASHBOARD_ROUTES = {
   [USER_ROLES.SOCIO]: '/dashboard/socio',
 } as const;
 
-// Enhanced QR Code configuration with better CORS handling
+// Enhanced QR Code configuration with dynamic URL detection
 export const QR_CONFIG = {
   size: 256,
   margin: 2,
@@ -117,7 +136,7 @@ export const QR_CONFIG = {
     light: '#FFFFFF',
   },
   errorCorrectionLevel: 'M' as const,
-  baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
+  baseUrl: getBaseUrl(),
   validationPath: '/validar-beneficio',
   // Enhanced QR options for better quality and CORS handling
   quality: 0.92,
@@ -297,4 +316,12 @@ export const validateCorsConfig = () => {
       !hasValidOrigins ? 'Configure CORS origins in STORAGE_CONFIG' : null,
     ].filter(Boolean),
   };
+};
+
+// Helper function to get the current URL (client-side only)
+export const getCurrentUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.host}`;
+  }
+  return getBaseUrl();
 };

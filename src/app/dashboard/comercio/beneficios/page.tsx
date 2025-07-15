@@ -65,7 +65,7 @@ const BeneficiosFiltradosSection: React.FC<{
   onToggleStatus: (id: string, estado: 'activo' | 'inactivo') => void;
   onRefresh: () => void;
   onExport: () => void;
-}> = ({ beneficios, filtro, loading, onEdit, onDelete, onToggleStatus, onRefresh, onExport }) => {
+}> = ({ beneficios, filtro, loading, onEdit, onDelete, onRefresh, onExport }) => {
   
   const beneficiosFiltrados = useMemo(() => {
     const now = new Date();
@@ -165,10 +165,7 @@ const BeneficiosFiltradosSection: React.FC<{
         userRole="comercio"
         onEdit={onEdit}
         onDelete={onDelete}
-        onToggleStatus={onToggleStatus}
         onRefresh={onRefresh}
-        onExport={onExport}
-        showCreateButton={false}
         showFilters={false}
       />
     </div>
@@ -517,11 +514,7 @@ function ComercioBeneficiosContent() {
                 userRole="comercio"
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onToggleStatus={handleToggleStatus}
                 onRefresh={refrescar}
-                onExport={handleExport}
-                onCreateNew={handleCreateNew}
-                showCreateButton={true}
                 showFilters={true}
               />
 

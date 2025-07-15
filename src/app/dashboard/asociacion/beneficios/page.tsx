@@ -109,7 +109,7 @@ export default function AsociacionBeneficiosPage() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50/50 via-white to-celestial-50/30 flex items-center justify-center">
+      <div className="asociacion-page-container flex items-center justify-center">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -143,18 +143,8 @@ export default function AsociacionBeneficiosPage() {
           />
         )}
       >
-        <div className="dashboard-container min-h-screen">
-          {/* Enhanced animated background elements */}
-          <div className="absolute inset-0 bg-grid opacity-30"></div>
-          
-          {/* Dynamic floating geometric shapes */}
-          <div className="absolute top-20 left-20 w-32 h-32 bg-gradient-to-br from-purple-200/40 to-pink-200/40 rounded-full blur-xl animate-float-gentle"></div>
-          <div className="absolute bottom-32 right-32 w-48 h-48 bg-gradient-to-br from-pink-200/30 to-purple-300/30 rounded-full blur-2xl animate-float-delay"></div>
-          <div className="absolute top-1/2 left-10 w-24 h-24 bg-gradient-to-br from-purple-300/35 to-pink-300/35 rounded-full blur-lg animate-float"></div>
-          <div className="absolute top-1/4 right-20 w-16 h-16 bg-gradient-to-br from-pink-400/40 to-purple-400/40 rounded-full blur-md animate-pulse-glow"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-20 h-20 bg-gradient-to-br from-purple-300/30 to-pink-400/30 rounded-full blur-lg animate-bounce-slow"></div>
-
-          <div className="relative z-10 p-8 space-y-12">
+        <div className="asociacion-page-container">
+          <div className="p-8 space-y-12">
             {/* Enhanced Header */}
             <motion.div
               initial={{ opacity: 0, y: -30 }}
