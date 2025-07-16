@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DashboardSidebar } from './DashboardSidebar';
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, X, Menu } from 'lucide-react';
 import SmoothPageTransition from './SmoothPageTransition';
 
 interface SidebarProps {
@@ -119,6 +119,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Mobile Menu Button */}
+      {isMobile && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleSidebarToggle}
+          className="fixed top-4 left-4 z-50 w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center lg:hidden"
+        >
+          <Menu className="w-6 h-6 text-gray-600" />
+        </motion.button>
+      )}
+
       {/* Main Layout Container */}
       <div className="flex min-h-screen">
         {/* Mobile Sidebar Backdrop */}
