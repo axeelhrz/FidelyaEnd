@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useComercio } from '@/hooks/useComercio';
 import { toast } from 'react-hot-toast';
+import { QR_CONFIG } from '@/lib/constants';
 
 interface QRManagementProps {
   onNavigate?: (section: string) => void;
@@ -64,9 +65,10 @@ export const QRManagement: React.FC<QRManagementProps> = ({}) => {
   const generateValidationUrl = useCallback(() => {
     if (!comercio) return '';
     
-    // Use the current origin to ensure it works in all environments
-    const origin = window.location.origin;
-    return `${origin}/validar-beneficio?comercio=${comercio.id}`;
+    // Usar la URL de producción configurada en QR_CONFIG.baseUrl
+    // en lugar de window.location.origin para evitar URLs de localhost
+    const baseUrl = QR_CONFIG.baseUrl;
+    return `${baseUrl}/validar-beneficio?comercio=${comercio.id}`;
   }, [comercio]);
 
   const handleCopyQRUrl = useCallback(() => {

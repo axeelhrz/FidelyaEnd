@@ -17,6 +17,7 @@ import {
   Store,
   Clock
 } from 'lucide-react';
+import { QR_CONFIG } from '@/lib/constants';
 
 interface ValidationResult {
   success: boolean;
@@ -152,7 +153,7 @@ export const ValidationResultModal: React.FC<ValidationResultModalProps> = ({
     const shareData = {
       title: '¡Beneficio validado en Fidelya!',
       text: `Acabo de usar un beneficio en ${data.comercio.nombre}: ${data.beneficio ? formatDiscount(data.beneficio) : ''}`,
-      url: window.location.origin
+      url: QR_CONFIG.baseUrl
     };
 
     try {

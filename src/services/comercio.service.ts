@@ -111,15 +111,8 @@ class ComercioService {
    * Get the correct base URL for QR generation
    */
   private getQRBaseUrl(): string {
-    // Try to get current URL if in browser
-    if (typeof window !== 'undefined') {
-      // Get the current origin (protocol + hostname + port)
-      const origin = window.location.origin;
-      console.log('🔗 Detected origin for QR:', origin);
-      return origin;
-    }
-    
-    // Fallback to configured base URL
+    // Siempre usar la URL de producción configurada en QR_CONFIG.baseUrl
+    // en lugar de window.location.origin para evitar URLs de localhost
     return QR_CONFIG.baseUrl;
   }
 

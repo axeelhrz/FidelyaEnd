@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Comercio, ComercioFormData } from '@/types/comercio';
+import { QR_CONFIG } from '@/lib/constants';
 
 export const updateComercioProfile = async (
   userId: string, 
@@ -134,7 +135,9 @@ export const generateQRValidationUrl = (comercioId: string, beneficioId?: string
 };
 
 export const generateWebValidationUrl = (comercioId: string, beneficioId?: string): string => {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  // Usar la URL de producción configurada en QR_CONFIG.baseUrl
+  // en lugar de window.location.origin para evitar URLs de localhost
+  const baseUrl = QR_CONFIG.baseUrl;
   const params = new URLSearchParams({ comercio: comercioId });
   if (beneficioId) {
     params.append('beneficio', beneficioId);
