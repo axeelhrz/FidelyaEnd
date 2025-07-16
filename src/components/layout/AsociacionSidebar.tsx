@@ -20,7 +20,8 @@ import {
   Zap,
   Clock,
   UserCheck,
-  Plus
+  Plus,
+  Menu
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocios } from '@/hooks/useSocios';
@@ -71,6 +72,7 @@ interface SubmenuItem {
 
 export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
   open,
+  onToggle,
   onMenuClick,
   onLogoutClick,
   activeSection,
@@ -322,8 +324,6 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
   // Auto-expand menu items that have active sub-items
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  // Optimized navigation handler
-
   // Check if menu item is active
   const isActiveItem = useCallback((item: MenuItem) => {
     return pathname === item.route || activeSection === item.id;
@@ -416,98 +416,108 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-100 flex-shrink-0">
+      {/* Compact Header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="relative">
-            <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl flex items-center justify-center shadow-sm">
-              <Building2 className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-sky-600 rounded-lg flex items-center justify-center shadow-sm">
+              <Building2 className="w-5 h-5 text-white" />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
           </div>
           
           {open && (
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900 truncate">
+              <h2 className="text-base font-semibold text-gray-900 truncate">
                 {user?.nombre || 'Asociación'}
               </h2>
-              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border text-emerald-600 bg-emerald-50 border-emerald-200">
-                <CheckCircle className="w-3 h-3 mr-1" />
+              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border text-emerald-600 bg-emerald-50 border-emerald-200">
+                <CheckCircle className="w-2.5 h-2.5 mr-1" />
                 Panel Ejecutivo
               </div>
             </div>
           )}
+          
+          {/* Mobile toggle button */}
+          <button
+            onClick={onToggle}
+            className="lg:hidden p-1 rounded-md hover:bg-gray-100 transition-colors"
+          >
+            <Menu className="w-4 h-4 text-gray-500" />
+          </button>
         </div>
       </div>
 
-      {/* Quick Stats */}
+      {/* Compact Quick Stats */}
       {open && (
-        <div className="p-6 border-b border-gray-100 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-sky-600">{realtimeStats.totalSocios}</p>
-                  <p className="text-sm text-sky-600/80">Socios</p>
-                </div>
-                <Users className="w-8 h-8 text-sky-500" />
+        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-sky-50 rounded-lg p-2.5 border border-sky-100">
+              <div className="flex items-center justify-between mb-1">
+                <Users className="w-4 h-4 text-sky-500" />
+                <span className="text-xs font-medium text-sky-600">{realtimeStats.totalSocios}</span>
               </div>
+              <p className="text-xs text-sky-600/80 font-medium">Socios</p>
             </div>
             
-            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-emerald-600">{realtimeStats.comerciosActivos}</p>
-                  <p className="text-sm text-emerald-600/80">Comercios</p>
-                </div>
-                <Store className="w-8 h-8 text-emerald-500" />
+            <div className="bg-emerald-50 rounded-lg p-2.5 border border-emerald-100">
+              <div className="flex items-center justify-between mb-1">
+                <Store className="w-4 h-4 text-emerald-500" />
+                <span className="text-xs font-medium text-emerald-600">{realtimeStats.comerciosActivos}</span>
               </div>
+              <p className="text-xs text-emerald-600/80 font-medium">Comercios</p>
             </div>
           </div>
           
-          <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Activity className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">Estado actual</span>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-1">
+                <Activity className="w-3 h-3 text-gray-500" />
+                <span className="text-xs font-medium text-gray-700">Estado actual</span>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3 text-xs text-gray-500">
                 <div className="text-right">
-                  <p className="text-lg font-semibold text-gray-900">{realtimeStats.sociosActivos}</p>
-                  <p className="text-xs text-gray-500">Activos</p>
+                  <span className="font-semibold text-gray-900">{realtimeStats.sociosActivos}</span>
+                  <span className="ml-1">activos</span>
                 </div>
+                <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
                 <div className="text-right">
-                  <p className="text-lg font-semibold text-gray-900">{realtimeStats.beneficiosActivos}</p>
-                  <p className="text-xs text-gray-500">Beneficios</p>
+                  <span className="font-semibold text-gray-900">{realtimeStats.beneficiosActivos}</span>
+                  <span className="ml-1">beneficios</span>
                 </div>
               </div>
             </div>
             
-            {realtimeStats.sociosVencidos > 0 && (
-              <div className="mt-3 flex items-center justify-between p-2 bg-red-50 rounded-lg border border-red-100">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <span className="text-sm text-red-600">Socios vencidos</span>
-                </div>
-                <span className="text-sm font-semibold text-red-600">{realtimeStats.sociosVencidos}</span>
-              </div>
-            )}
-            
-            {realtimeStats.solicitudesPendientes > 0 && (
-              <div className="mt-2 flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-100">
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm text-amber-600">Solicitudes pendientes</span>
-                </div>
-                <span className="text-sm font-semibold text-amber-600">{realtimeStats.solicitudesPendientes}</span>
+            {/* Compact Alert Indicators */}
+            {(realtimeStats.sociosVencidos > 0 || realtimeStats.solicitudesPendientes > 0) && (
+              <div className="flex space-x-2">
+                {realtimeStats.sociosVencidos > 0 && (
+                  <div className="flex-1 flex items-center justify-between px-2 py-1 bg-red-50 rounded border border-red-100">
+                    <div className="flex items-center space-x-1">
+                      <AlertCircle className="w-3 h-3 text-red-500" />
+                      <span className="text-xs text-red-600">Vencidos</span>
+                    </div>
+                    <span className="text-xs font-semibold text-red-600">{realtimeStats.sociosVencidos}</span>
+                  </div>
+                )}
+                
+                {realtimeStats.solicitudesPendientes > 0 && (
+                  <div className="flex-1 flex items-center justify-between px-2 py-1 bg-amber-50 rounded border border-amber-100">
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-amber-500" />
+                      <span className="text-xs text-amber-600">Pendientes</span>
+                    </div>
+                    <span className="text-xs font-semibold text-amber-600">{realtimeStats.solicitudesPendientes}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      {/* Compact Navigation */}
+      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto min-h-0">
         {menuItems.map((item) => {
           const isActive = isActiveItem(item);
           
@@ -516,7 +526,7 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
               <button
                 onClick={() => handleMenuClick(item.id, !!item.submenu, item.route)}
                 className={`
-                  w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200
+                  w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200
                   ${isActive 
                     ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm' 
                     : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
@@ -525,20 +535,20 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
                 `}
               >
                 <div className={`
-                  flex items-center justify-center w-8 h-8 rounded-lg transition-colors
+                  flex items-center justify-center w-7 h-7 rounded-md transition-colors
                   ${isActive ? 'bg-sky-100 text-sky-600' : 'text-gray-500'}
                 `}>
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="w-4 h-4" />
                 </div>
                 
                 {open && (
                   <>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium truncate">{item.label}</span>
+                        <span className="font-medium truncate text-sm">{item.label}</span>
                         {item.isNew && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <Zap className="w-3 h-3 mr-1" />
+                            <Zap className="w-2.5 h-2.5 mr-0.5" />
                             Nuevo
                           </span>
                         )}
@@ -550,12 +560,12 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
                     
                     <div className="flex items-center space-x-2">
                       {item.badge !== undefined && item.badge > 0 && (
-                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-sky-500 rounded-full min-w-[20px]">
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-sky-500 rounded-full min-w-[18px]">
                           {item.badge > 99 ? '99+' : item.badge}
                         </span>
                       )}
                       {item.submenu && (
-                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${
+                        <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${
                           expandedItems.has(item.id) ? 'rotate-90' : ''
                         } ${isActive ? 'text-sky-600' : 'text-gray-400'}`} />
                       )}
@@ -564,23 +574,23 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
                 )}
               </button>
 
-              {/* Submenu */}
+              {/* Compact Submenu */}
               {item.submenu && expandedItems.has(item.id) && open && (
-                <div className="ml-4 mt-2 space-y-1 border-l-2 border-gray-200 pl-4">
+                <div className="ml-3 mt-1 space-y-1 border-l-2 border-gray-200 pl-3">
                   {item.submenu.map((subItem) => (
                     <button
                       key={subItem.id}
                       onClick={() => handleMenuClick(subItem.id, false, subItem.route)}
                       className={`
-                        w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-200
+                        w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition-all duration-200
                         ${isSubmenuItemActive(subItem)
                           ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm'
                           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }
                       `}
                     >
-                      <div className="flex items-center space-x-3 flex-1">
-                        <div className={`p-1.5 rounded-lg transition-all duration-200 ${
+                      <div className="flex items-center space-x-2.5 flex-1">
+                        <div className={`p-1 rounded-md transition-all duration-200 ${
                           isSubmenuItemActive(subItem)
                             ? 'bg-sky-100 text-sky-600' 
                             : 'bg-gray-100 text-gray-400'
@@ -591,7 +601,7 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
                       </div>
                       
                       {subItem.count !== undefined && subItem.count > 0 && (
-                        <span className={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full min-w-[16px] ${
+                        <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold rounded-full min-w-[16px] ${
                           subItem.urgent 
                             ? 'text-white bg-red-500' 
                             : 'text-white bg-gray-500'
@@ -608,16 +618,16 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
         })}
       </nav>
 
-      {/* Quick Actions */}
+      {/* Compact Quick Actions */}
       {open && (
-        <div className="p-4 border-t border-gray-100 flex-shrink-0">
-          <div className="space-y-2">
-            <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+        <div className="px-3 py-2 border-t border-gray-100 flex-shrink-0">
+          <div className="flex space-x-2">
+            <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
               <Bell className="w-4 h-4" />
               <span className="text-sm">Notificaciones</span>
             </button>
             
-            <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+            <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
               <HelpCircle className="w-4 h-4" />
               <span className="text-sm">Ayuda</span>
             </button>
@@ -625,12 +635,12 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
         </div>
       )}
 
-      {/* User Section */}
-      <div className="p-4 border-t border-gray-100 flex-shrink-0">
+      {/* Compact User Section */}
+      <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0">
         {open ? (
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-              <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-sky-600 rounded-lg flex items-center justify-center">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3 p-2.5 bg-gray-50 rounded-lg">
+              <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-sky-600 rounded-md flex items-center justify-center">
                 <span className="text-white font-semibold text-sm">
                   {user?.nombre?.charAt(0).toUpperCase() || 'A'}
                 </span>
@@ -643,26 +653,24 @@ export const AsociacionSidebar: React.FC<AsociacionSidebarProps> = ({
                   {user?.email || 'admin@asociacion.com'}
                 </p>
               </div>
-              <div className="flex items-center">
-                <Star className="w-4 h-4 text-amber-400" />
-              </div>
+              <Star className="w-3 h-3 text-amber-400" />
             </div>
             
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-200"
+              className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
             >
               <LogOut className="w-4 h-4" />
-              <span className="font-medium">Cerrar Sesión</span>
+              <span className="font-medium text-sm">Cerrar Sesión</span>
             </button>
           </div>
         ) : (
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+            className="w-full flex items-center justify-center p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Cerrar Sesión"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
           </button>
         )}
       </div>

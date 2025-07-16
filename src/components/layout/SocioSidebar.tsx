@@ -15,7 +15,8 @@ import {
   Bell,
   HelpCircle,
   Star,
-  Zap
+  Zap,
+  Menu
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocioProfile } from '@/hooks/useSocioProfile';
@@ -232,12 +233,12 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
         ${open ? 'w-80' : 'w-0 lg:w-20'}
         lg:relative lg:translate-x-0
       `}>
-        <div className="p-6 space-y-4">
+        <div className="p-4 space-y-3">
           <div className="animate-pulse">
-            <div className="h-12 bg-gray-200 rounded-lg mb-4"></div>
-            <div className="space-y-3">
+            <div className="h-10 bg-gray-200 rounded-lg mb-3"></div>
+            <div className="space-y-2">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="h-10 bg-gray-200 rounded-lg"></div>
+                <div key={i} className="h-8 bg-gray-200 rounded-lg"></div>
               ))}
             </div>
           </div>
@@ -260,156 +261,161 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
       <div className={`
         fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-lg z-40 transition-all duration-300
         ${open ? 'w-80' : 'w-0 lg:w-20'}
-        lg:relative lg:translate-x-0
+        lg:relative lg:translate-x-0 flex flex-col
       `}>
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
-                  <User className="w-6 h-6 text-white" />
-                </div>
-                <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${membershipStatus.dot} rounded-full border-2 border-white`}></div>
+        {/* Compact Header */}
+        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center space-x-3">
+            <div className="relative">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                <User className="w-5 h-5 text-white" />
               </div>
-              
-              {open && (
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-semibold text-gray-900 truncate">
-                    {socio?.nombre || user?.nombre || 'Socio'}
-                  </h2>
-                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${membershipStatus.color}`}>
-                    <membershipStatus.icon className="w-3 h-3 mr-1" />
-                    {membershipStatus.text}
-                  </div>
-                </div>
-              )}
+              <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${membershipStatus.dot} rounded-full border-2 border-white`}></div>
             </div>
+            
+            {open && (
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-semibold text-gray-900 truncate">
+                  {socio?.nombre || user?.nombre || 'Socio'}
+                </h2>
+                <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${membershipStatus.color}`}>
+                  <membershipStatus.icon className="w-2.5 h-2.5 mr-1" />
+                  {membershipStatus.text}
+                </div>
+              </div>
+            )}
+            
+            {/* Mobile toggle button */}
+            <button
+              onClick={onToggle}
+              className="lg:hidden p-1 rounded-md hover:bg-gray-100 transition-colors"
+            >
+              <Menu className="w-4 h-4 text-gray-500" />
+            </button>
           </div>
+        </div>
 
-          {/* Quick Stats */}
-          <SocioSidebarStats
-            totalBeneficios={realtimeStats.totalBeneficios}
-            ahorroTotal={realtimeStats.ahorroTotal}
-            beneficiosUsados={realtimeStats.beneficiosUsados}
-            beneficiosEstesMes={realtimeStats.beneficiosEstesMes}
-            isOpen={open}
-          />
+        {/* Compact Stats */}
+        <SocioSidebarStats
+          totalBeneficios={realtimeStats.totalBeneficios}
+          ahorroTotal={realtimeStats.ahorroTotal}
+          beneficiosUsados={realtimeStats.beneficiosUsados}
+          beneficiosEstesMes={realtimeStats.beneficiosEstesMes}
+          isOpen={open}
+        />
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            {menuItems.map((item) => {
-              const isActive = isActiveItem(item);
-              
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigation(item.route, item.id)}
-                  className={`
-                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200
-                    ${isActive 
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm' 
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                    }
-                    ${!open && 'lg:justify-center lg:px-2'}
-                  `}
-                >
-                  <div className={`
-                    flex items-center justify-center w-8 h-8 rounded-lg transition-colors
-                    ${isActive ? 'bg-blue-100 text-blue-600' : 'text-gray-500'}
-                  `}>
-                    <item.icon className="w-5 h-5" />
-                  </div>
-                  
-                  {open && (
-                    <>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium truncate">{item.label}</span>
-                          {item.isNew && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <Zap className="w-3 h-3 mr-1" />
-                              Nuevo
-                            </span>
-                          )}
-                        </div>
-                        {item.description && (
-                          <p className="text-xs text-gray-500 truncate">{item.description}</p>
-                        )}
-                      </div>
-                      
+        {/* Compact Navigation */}
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto min-h-0">
+          {menuItems.map((item) => {
+            const isActive = isActiveItem(item);
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavigation(item.route, item.id)}
+                className={`
+                  w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200
+                  ${isActive 
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm' 
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                  }
+                  ${!open && 'lg:justify-center lg:px-2'}
+                `}
+              >
+                <div className={`
+                  flex items-center justify-center w-7 h-7 rounded-md transition-colors
+                  ${isActive ? 'bg-blue-100 text-blue-600' : 'text-gray-500'}
+                `}>
+                  <item.icon className="w-4 h-4" />
+                </div>
+                
+                {open && (
+                  <>
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        {item.badge !== undefined && item.badge > 0 && (
-                          <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-blue-500 rounded-full min-w-[20px]">
-                            {item.badge > 99 ? '99+' : item.badge}
+                        <span className="font-medium truncate text-sm">{item.label}</span>
+                        {item.isNew && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <Zap className="w-2.5 h-2.5 mr-0.5" />
+                            Nuevo
                           </span>
                         )}
-                        <ChevronRight className={`w-4 h-4 transition-transform ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
                       </div>
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full min-w-[18px]">
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </span>
+                      )}
+                      <ChevronRight className={`w-3 h-3 transition-transform ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                    </div>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </nav>
 
-          {/* Quick Actions */}
-          {open && (
-            <div className="p-4 border-t border-gray-100">
-              <div className="space-y-2">
-                <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
-                  <Bell className="w-4 h-4" />
-                  <span className="text-sm">Notificaciones</span>
-                </button>
-                
-                <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
-                  <HelpCircle className="w-4 h-4" />
-                  <span className="text-sm">Ayuda</span>
-                </button>
-              </div>
+        {/* Compact Quick Actions */}
+        {open && (
+          <div className="px-3 py-2 border-t border-gray-100 flex-shrink-0">
+            <div className="flex space-x-2">
+              <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+                <Bell className="w-4 h-4" />
+                <span className="text-sm">Notificaciones</span>
+              </button>
+              
+              <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+                <HelpCircle className="w-4 h-4" />
+                <span className="text-sm">Ayuda</span>
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* User Section */}
-          <div className="p-4 border-t border-gray-100">
-            {open ? (
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-semibold text-sm">
-                      {(socio?.nombre || user?.nombre)?.charAt(0).toUpperCase() || 'S'}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {socio?.nombre || user?.nombre || 'Socio'}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      #{socio?.numeroSocio || 'N/A'}
-                    </p>
-                  </div>
-                  <div className="flex items-center">
-                    <Star className="w-4 h-4 text-amber-400" />
-                  </div>
+        {/* Compact User Section */}
+        <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0">
+          {open ? (
+            <div className="space-y-2">
+              <div className="flex items-center space-x-3 p-2.5 bg-gray-50 rounded-lg">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-md flex items-center justify-center">
+                  <span className="text-white font-semibold text-sm">
+                    {(socio?.nombre || user?.nombre)?.charAt(0).toUpperCase() || 'S'}
+                  </span>
                 </div>
-                
-                <button
-                  onClick={onLogoutClick}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-200"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="font-medium">Cerrar Sesión</span>
-                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {socio?.nombre || user?.nombre || 'Socio'}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    #{socio?.numeroSocio || 'N/A'}
+                  </p>
+                </div>
+                <Star className="w-3 h-3 text-amber-400" />
               </div>
-            ) : (
+              
               <button
                 onClick={onLogoutClick}
-                className="w-full flex items-center justify-center p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4" />
+                <span className="font-medium text-sm">Cerrar Sesión</span>
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <button
+              onClick={onLogoutClick}
+              className="w-full flex items-center justify-center p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </>
