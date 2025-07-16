@@ -13,7 +13,8 @@ import {
   User,
   ArrowRight,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,10 +53,10 @@ const ValidarBeneficioContent: React.FC = () => {
   
   const [comercio, setComercio] = useState<Comercio | null>(null);
   const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
-  // const [selectedBeneficio, setSelectedBeneficio] = useState<Beneficio | null>(null);
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   const comercioId = searchParams.get('comercio');
   const beneficioId = searchParams.get('beneficio');
@@ -72,16 +73,23 @@ const ValidarBeneficioContent: React.FC = () => {
       try {
         setLoading(true);
         
+        // Log debug info
+        setDebugInfo(`Intentando cargar comercio con ID: ${comercioId}`);
+        
         // Load comercio data
         const comercioData = await comercioService.getComercioById(comercioId);
+        
         if (!comercioData) {
           setError('Comercio no encontrado');
+          setDebugInfo(`Comercio con ID ${comercioId} no encontrado en la base de datos`);
           setLoading(false);
           return;
         }
 
+        setDebugInfo(`Comercio encontrado: ${comercioData.nombreComercio}, Estado: ${comercioData.estado}`);
+
         if (comercioData.estado !== 'activo') {
-          setError('Este comercio no está activo actualmente');
+          setError(`Este comercio no está activo actualmente (Estado: ${comercioData.estado})`);
           setLoading(false);
           return;
         }
@@ -90,6 +98,8 @@ const ValidarBeneficioContent: React.FC = () => {
 
         // Load active benefits for this comercio
         const beneficiosData = await comercioService.getActiveBenefits(comercioId);
+        setDebugInfo(prev => `${prev}\nBeneficios encontrados: ${beneficiosData.length}`);
+        
         // Map and ensure all required fields are present
         const beneficiosMapped: Beneficio[] = beneficiosData.map((b: unknown) => {
           const beneficioObj = b as {
@@ -127,12 +137,10 @@ const ValidarBeneficioContent: React.FC = () => {
         });
         setBeneficios(beneficiosMapped);
 
-        // If specific benefit ID is provided, you could select it here if needed
-        // (removed unused selectedBeneficio logic)
-
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Error al cargar la información del comercio');
+        setDebugInfo(prev => `${prev}\nError: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setLoading(false);
       }
@@ -227,12 +235,37 @@ const ValidarBeneficioContent: React.FC = () => {
           <p className="text-gray-600 mb-6">
             {error}
           </p>
-          <button
-            onClick={() => router.push('/')}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Volver al inicio
-          </button>
+          
+          {/* Debug info collapsible */}
+          {debugInfo && (
+            <div className="mb-6 text-left">
+              <details className="bg-gray-100 p-3 rounded-lg">
+                <summary className="cursor-pointer text-sm font-medium text-gray-700 flex items-center">
+                  <Info className="w-4 h-4 mr-1" />
+                  Información de diagnóstico
+                </summary>
+                <pre className="mt-2 text-xs text-gray-600 overflow-auto p-2 bg-gray-50 rounded">
+                  {debugInfo}
+                </pre>
+              </details>
+            </div>
+          )}
+          
+          <div className="flex flex-col space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Intentar nuevamente
+            </button>
+            
+            <button
+              onClick={() => router.push('/')}
+              className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Volver al inicio
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -275,9 +308,12 @@ const ValidarBeneficioContent: React.FC = () => {
                   height={48}
                   className="w-12 h-12 rounded-xl object-cover"
                   style={{ objectFit: 'cover' }}
+                  unoptimized // Prevent CORS issues with Next.js image optimization
                 />
               ) : (
-                <Store className="w-8 h-8 text-white" />
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Store className="w-6 h-6 text-blue-600" />
+                </div>
               )}
 
               <div className="flex-1">
