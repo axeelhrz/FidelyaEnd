@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG, getCurrentUrl } from '@/lib/constants';
+import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG } from '@/lib/constants';
 import { handleError } from '@/lib/error-handler';
 import QRCode from 'qrcode';
 
@@ -113,7 +113,10 @@ class ComercioService {
   private getQRBaseUrl(): string {
     // Try to get current URL if in browser
     if (typeof window !== 'undefined') {
-      return getCurrentUrl();
+      // Get the current origin (protocol + hostname + port)
+      const origin = window.location.origin;
+      console.log('🔗 Detected origin for QR:', origin);
+      return origin;
     }
     
     // Fallback to configured base URL

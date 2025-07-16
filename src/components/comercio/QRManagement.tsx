@@ -63,7 +63,10 @@ export const QRManagement: React.FC<QRManagementProps> = ({}) => {
 
   const generateValidationUrl = useCallback(() => {
     if (!comercio) return '';
-    return `${window.location.origin}/validar-beneficio?comercio=${comercio.id}`;
+    
+    // Use the current origin to ensure it works in all environments
+    const origin = window.location.origin;
+    return `${origin}/validar-beneficio?comercio=${comercio.id}`;
   }, [comercio]);
 
   const handleCopyQRUrl = useCallback(() => {

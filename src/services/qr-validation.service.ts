@@ -1,29 +1,31 @@
 import {
   collection,
   doc,
-  addDoc,
+  getDocs,
   query,
   where,
-  getDocs,
+  orderBy,
   serverTimestamp,
   runTransaction,
+  limit,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/lib/constants';
 import { handleError } from '@/lib/error-handler';
-import { qrStatsService } from './qr-stats.service';
-import { ClienteService } from './cliente.service';
-import { ClienteAutoData } from '@/types/cliente';
 
 export interface QRValidationRequest {
-  qrData: string;
   socioId: string;
-  location?: {
-    latitude: number;
-    longitude: number;
+  comercioId: string;
+  beneficioId?: string;
+  asociacionId?: string;
+  ubicacion?: {
+    lat: number;
+    lng: number;
+  }; 
+  dispositivo?: {
+    tipo: string; // e.g., 'mobile', 'desktop'
+    version: string; // e.g., '1.0.0'
   };
-  device?: string;
-  userAgent?: string;
 }
 
 export interface QRValidationResponse {
@@ -37,76 +39,59 @@ export interface QRValidationResponse {
       direccion?: string;
       logo?: string;
     };
-    beneficios: Array<{
+    beneficio?: {
       id: string;
       titulo: string;
       descripcion: string;
       descuento: number;
       tipo: string;
       condiciones?: string;
-      fechaFin: Date;
-    }>;
+    };
     socio: {
       id: string;
       nombre: string;
-      numeroSocio?: string;
+      numeroSocio: string;
       estadoMembresia: string;
     };
     validacion: {
       id: string;
       fechaValidacion: Date;
+      montoDescuento: number;
       codigoValidacion: string;
-    };
-    cliente?: {
-      id: string;
-      esNuevo: boolean;
-      datosCompletos: boolean;
     };
   };
   error?: string;
 }
 
 class QRValidationService {
-  private readonly comerciosCollection = COLLECTIONS.COMERCIOS;
   private readonly sociosCollection = COLLECTIONS.SOCIOS;
+  private readonly comerciosCollection = COLLECTIONS.COMERCIOS;
   private readonly beneficiosCollection = COLLECTIONS.BENEFICIOS;
   private readonly validacionesCollection = COLLECTIONS.VALIDACIONES;
 
   /**
-   * Validate QR code and process socio access to benefits
+   * Validate QR code and create validation record
    */
   async validateQRCode(request: QRValidationRequest): Promise<QRValidationResponse> {
     try {
-      // Track QR scan first
-      const comercioIdForTracking = this.extractComercioIdFromQR(request.qrData);
-      if (comercioIdForTracking) {
-        await qrStatsService.trackQRScan(comercioIdForTracking, {
-          socioId: request.socioId,
-          location: request.location,
-          device: request.device,
-          userAgent: request.userAgent,
-        });
-      }
-
-      // Parse QR data to extract comercio ID
-      const comercioId = this.extractComercioIdFromQR(request.qrData);
+      // Extract comercio ID from QR data
+      const comercioId = request.comercioId;
       if (!comercioId) {
         return {
           success: false,
-          message: 'Código QR inválido o corrupto',
-          error: 'INVALID_QR_CODE'
+          message: 'Código QR inválido o dañado',
+          error: 'INVALID_QR'
         };
       }
 
+      // Run transaction to ensure data consistency
       const result = await runTransaction(db, async (transaction) => {
         // 1. Get and validate socio
         const socioRef = doc(db, this.sociosCollection, request.socioId);
         const socioDoc = await transaction.get(socioRef);
-        
         if (!socioDoc.exists()) {
           throw new Error('Socio no encontrado');
         }
-
         const socioData = socioDoc.data();
 
         // Check socio status
@@ -118,7 +103,6 @@ class QRValidationService {
         if (socioData.estadoMembresia === 'vencido') {
           throw new Error('Tu membresía está vencida. Renueva tu cuota para acceder a beneficios.');
         }
-
         if (socioData.estadoMembresia === 'pendiente') {
           throw new Error('Tu membresía está pendiente de activación. Contacta a tu asociación.');
         }
@@ -126,13 +110,10 @@ class QRValidationService {
         // 2. Get and validate comercio
         const comercioRef = doc(db, this.comerciosCollection, comercioId);
         const comercioDoc = await transaction.get(comercioRef);
-        
         if (!comercioDoc.exists()) {
           throw new Error('Comercio no encontrado');
         }
-
         const comercioData = comercioDoc.data();
-
         if (comercioData.estado !== 'activo') {
           throw new Error('Este comercio no está disponible actualmente');
         }
@@ -147,291 +128,270 @@ class QRValidationService {
         const beneficiosQuery = query(
           collection(db, this.beneficiosCollection),
           where('comercioId', '==', comercioId),
-          where('estado', '==', 'activo'),
-          where('asociacionesVinculadas', 'array-contains', socioAsociacionId)
+          where('estado', '==', 'activo')
         );
-
         const beneficiosSnapshot = await getDocs(beneficiosQuery);
-        const beneficiosDisponibles = beneficiosSnapshot.docs
-          .map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              titulo: data.titulo,
-              descripcion: data.descripcion,
-              descuento: data.descuento,
-              tipo: data.tipo,
-              condiciones: data.condiciones,
-              fechaFin: data.fechaFin?.toDate() || new Date(),
-              limiteTotal: data.limiteTotal,
-              usosActuales: data.usosActuales || 0,
-            };
-          })
-          .filter(beneficio => {
-            // Filter out expired benefits
-            return beneficio.fechaFin > new Date();
-          })
-          .filter(beneficio => {
-            // Filter out benefits that have reached their limit
-            if (beneficio.limiteTotal && beneficio.usosActuales >= beneficio.limiteTotal) {
-              return false;
-            }
-            return true;
-          });
+        
+        // Filter benefits by association if needed
+        interface Beneficio {
+          id: string;
+          titulo: string;
+          descripcion: string;
+          descuento: number;
+          tipo: string;
+          condiciones?: string;
+          asociacionesDisponibles?: string[];
+        }
 
-        if (beneficiosDisponibles.length === 0) {
-          throw new Error('No hay beneficios disponibles en este comercio para tu asociación');
+        const availableBeneficios = beneficiosSnapshot.docs
+          .map(docSnap => {
+            const data = docSnap.data();
+            return { id: docSnap.id, ...data } as Beneficio;
+          })
+          .filter((beneficio: Beneficio) => 
+            !beneficio.asociacionesDisponibles || 
+            beneficio.asociacionesDisponibles.includes(socioAsociacionId)
+          );
+
+        if (availableBeneficios.length === 0) {
+          throw new Error('No hay beneficios disponibles para este comercio');
         }
 
         // 4. Create validation record
-        const validacionData = {
+        const validationCode = this.generateValidationCode();
+        const validationData = {
           socioId: request.socioId,
           socioNombre: socioData.nombre,
-          socioAsociacionId: socioAsociacionId,
+          socioNumero: socioData.numeroSocio,
           comercioId: comercioId,
-          comercioNombre: comercioData.nombreComercio,
+          comercioNombre: comercioData.nombreComercio || comercioData.nombre,
+          asociacionId: socioAsociacionId,
+          asociacionNombre: socioData.asociacionNombre,
           fechaValidacion: serverTimestamp(),
-          resultado: 'valido',
-          beneficiosDisponibles: beneficiosDisponibles.length,
-          ubicacion: request.location || null,
-          dispositivo: request.device || null,
-          codigoValidacion: this.generateValidationCode(),
-          metadata: {
-            userAgent: request.userAgent,
-            qrData: request.qrData,
-            timestamp: Date.now(),
-          },
+          codigoValidacion: validationCode,
+          estado: 'exitosa',
+          beneficiosDisponibles: availableBeneficios.map(b => ({
+            id: b.id,
+            titulo: b.titulo,
+            descuento: b.descuento,
+            tipo: b.tipo
+          })),
+          beneficioUsado: null,
+          montoDescuento: 0,
+          codigoUso: null,
+          ubicacion: request.ubicacion || null,
+          dispositivo: request.dispositivo || null,
+          metadata: {}
         };
 
-        const validacionRef = await addDoc(collection(db, this.validacionesCollection), validacionData);
+        const validacionRef = doc(collection(db, this.validacionesCollection));
+        transaction.set(validacionRef, validationData);
 
-        // Track validation in QR stats
-        await qrStatsService.trackQRValidation(comercioId, {
-          socioId: request.socioId,
-          success: true,
+        // 5. Update comercio stats
+        transaction.update(comercioRef, {
+          validacionesRealizadas: (comercioData.validacionesRealizadas || 0) + 1,
+          clientesAtendidos: (comercioData.clientesAtendidos || 0) + 1,
+          'metadata.ultimaValidacion': serverTimestamp()
         });
 
+        // 6. Update socio stats
+        transaction.update(socioRef, {
+          validacionesRealizadas: (socioData.validacionesRealizadas || 0) + 1,
+          'metadata.ultimaValidacion': serverTimestamp()
+        });
+
+        // 7. Return success response
         return {
-          validacionId: validacionRef.id,
-          comercio: {
-            id: comercioId,
-            nombre: comercioData.nombreComercio,
-            categoria: comercioData.categoria,
-            direccion: comercioData.direccion,
-            logo: comercioData.logo,
-          },
-          beneficios: beneficiosDisponibles.map(beneficio => ({
-            id: beneficio.id,
-            titulo: beneficio.titulo,
-            descripcion: beneficio.descripcion,
-            descuento: beneficio.descuento,
-            tipo: beneficio.tipo,
-            condiciones: beneficio.condiciones,
-            fechaFin: beneficio.fechaFin,
-          })),
-          socio: {
-            id: request.socioId,
-            nombre: socioData.nombre,
-            numeroSocio: socioData.numeroSocio,
-            estadoMembresia: socioData.estadoMembresia,
-          },
-          validacion: {
-            id: validacionRef.id,
-            fechaValidacion: new Date(),
-            codigoValidacion: validacionData.codigoValidacion,
-          },
-          socioData: socioData, // Datos completos del socio para crear cliente
-          asociacionId: socioAsociacionId,
+          success: true,
+          message: 'Validación exitosa',
+          data: {
+            comercio: {
+              id: comercioId,
+              nombre: comercioData.nombreComercio || comercioData.nombre,
+              categoria: comercioData.categoria,
+              direccion: comercioData.direccion,
+              logo: comercioData.logo
+            },
+            socio: {
+              id: request.socioId,
+              nombre: socioData.nombre,
+              numeroSocio: socioData.numeroSocio,
+              estadoMembresia: socioData.estadoMembresia
+            },
+            validacion: {
+              id: validacionRef.id,
+              fechaValidacion: new Date(),
+              montoDescuento: 0,
+              codigoValidacion: validationCode
+            }
+          }
         };
       });
 
-      // 5. Create or update cliente automatically (outside transaction to avoid conflicts)
-      let clienteInfo = null;
-      try {
-        const clienteAutoData: ClienteAutoData = {
-          socioId: request.socioId,
-          socioNombre: result.socioData.nombre,
-          socioEmail: result.socioData.email,
-          asociacionId: result.asociacionId,
-          comercioId: comercioId,
-        };
-
-        const clienteId = await ClienteService.createOrUpdateClienteFromValidation(
-          clienteAutoData,
-          result.validacionId
-        );
-
-        // Get cliente info to determine if it's new and if data is complete
-        const cliente = await ClienteService.getClienteById(clienteId);
-        if (cliente) {
-          clienteInfo = {
-            id: clienteId,
-            esNuevo: cliente.totalValidaciones === 1, // Es nuevo si es su primera validación
-            datosCompletos: cliente.datosCompletos,
-          };
-        }
-      } catch (error) {
-        console.error('Error creating/updating cliente:', error);
-        // No fallar la validación por error en cliente, solo log
-      }
-
-      return {
-        success: true,
-        message: 'Validación exitosa. Beneficios disponibles.',
-        data: {
-          comercio: result.comercio,
-          beneficios: result.beneficios,
-          socio: result.socio,
-          validacion: result.validacion,
-          cliente: clienteInfo ?? undefined,
-        },
-      };
-
+      return result;
     } catch (error) {
-      // Track failed validation
-      const comercioId = this.extractComercioIdFromQR(request.qrData);
-      if (comercioId) {
-        await qrStatsService.trackQRValidation(comercioId, {
-          socioId: request.socioId,
-          success: false,
-        });
-      }
-
-      const errorMessage = error instanceof Error ? error.message : 'Error al validar código QR';
-      handleError(error, 'QR Validation');
-      
+      console.error('Error validating QR code:', error);
       return {
         success: false,
-        message: errorMessage,
-        error: 'VALIDATION_FAILED'
+        message: error instanceof Error ? error.message : 'Error desconocido al validar el código QR',
+        error: 'VALIDATION_ERROR'
       };
     }
   }
 
   /**
-   * Use a specific benefit after QR validation
+   * Use a benefit after validation
    */
   async useBenefit(
     validacionId: string,
     beneficioId: string,
-    montoOriginal?: number
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: {
-      montoDescuento: number;
-      montoFinal: number;
-      codigoUso: string;
-    };
-  }> {
+    montoCompra?: number
+  ): Promise<QRValidationResponse> {
     try {
+      // Run transaction to ensure data consistency
       const result = await runTransaction(db, async (transaction) => {
-        // Get validation record
+        // 1. Get validation record
         const validacionRef = doc(db, this.validacionesCollection, validacionId);
         const validacionDoc = await transaction.get(validacionRef);
-        
         if (!validacionDoc.exists()) {
           throw new Error('Validación no encontrada');
         }
-
         const validacionData = validacionDoc.data();
 
-        // Get benefit
+        // Check if benefit is already used
+        if (validacionData.beneficioUsado) {
+          throw new Error('Ya se ha utilizado un beneficio en esta validación');
+        }
+
+        // 2. Get benefit
         const beneficioRef = doc(db, this.beneficiosCollection, beneficioId);
         const beneficioDoc = await transaction.get(beneficioRef);
-        
         if (!beneficioDoc.exists()) {
           throw new Error('Beneficio no encontrado');
         }
-
         const beneficioData = beneficioDoc.data();
 
-        // Check if benefit is still active and available
+        // Check if benefit is active
         if (beneficioData.estado !== 'activo') {
-          throw new Error('Este beneficio ya no está disponible');
+          throw new Error('Este beneficio no está disponible actualmente');
         }
 
-        if (beneficioData.fechaFin?.toDate() < new Date()) {
-          throw new Error('Este beneficio ha expirado');
+        // Check if benefit is available for this socio's association
+        const socioAsociacionId = validacionData.asociacionId;
+        if (
+          beneficioData.asociacionesDisponibles && 
+          beneficioData.asociacionesDisponibles.length > 0 &&
+          !beneficioData.asociacionesDisponibles.includes(socioAsociacionId)
+        ) {
+          throw new Error('Este beneficio no está disponible para tu asociación');
         }
 
-        // Check usage limits
-        if (beneficioData.limiteTotal && beneficioData.usosActuales >= beneficioData.limiteTotal) {
-          throw new Error('Este beneficio ha alcanzado su límite de uso');
+        // Check if benefit has reached its total limit
+        if (
+          beneficioData.limiteTotal && 
+          beneficioData.usosActuales >= beneficioData.limiteTotal
+        ) {
+          throw new Error('Este beneficio ha alcanzado su límite de usos');
         }
 
-        // Calculate discount
-        const { montoDescuento, montoFinal } = this.calculateDiscount(
-          beneficioData as { tipo: string; descuento: number },
-          montoOriginal || 0
+        // Check if socio has reached their limit for this benefit
+        const socioId = validacionData.socioId;
+        const socioUsosQuery = query(
+          collection(db, this.validacionesCollection),
+          where('socioId', '==', socioId),
+          where('beneficioUsado.id', '==', beneficioId)
+        );
+        const socioUsosSnapshot = await getDocs(socioUsosQuery);
+        
+        if (
+          beneficioData.limitePorSocio && 
+          socioUsosSnapshot.size >= beneficioData.limitePorSocio
+        ) {
+          throw new Error(`Has alcanzado el límite de usos (${beneficioData.limitePorSocio}) para este beneficio`);
+        }
+
+        // Calculate discount amount
+        const montoDescuento = this.calculateDiscountAmount(
+          beneficioData.tipo,
+          beneficioData.descuento,
+          montoCompra
         );
 
-        // Update benefit usage count
+        // Generate usage code
+        const usageCode = this.generateUsageCode();
+
+        // 3. Update validation record
+        transaction.update(validacionRef, {
+          beneficioUsado: {
+            id: beneficioId,
+            titulo: beneficioData.titulo,
+            descuento: beneficioData.descuento,
+            tipo: beneficioData.tipo
+          },
+          montoDescuento,
+          codigoUso: usageCode,
+          fechaUso: serverTimestamp(),
+          montoCompra: montoCompra || 0
+        });
+
+        // 4. Update benefit usage count
         transaction.update(beneficioRef, {
           usosActuales: (beneficioData.usosActuales || 0) + 1,
-          actualizadoEn: serverTimestamp(),
+          'metadata.ultimoUso': serverTimestamp()
         });
 
-        // Update validation record with benefit usage
-        const codigoUso = this.generateUsageCode();
-        transaction.update(validacionRef, {
-          beneficioUsado: beneficioId,
-          beneficioTitulo: beneficioData.titulo,
-          montoOriginal: montoOriginal || 0,
-          montoDescuento,
-          montoFinal,
-          codigoUso,
-          fechaUso: serverTimestamp(),
-          estado: 'usado',
-        });
+        // 5. Update comercio stats
+        const comercioRef = doc(db, this.comerciosCollection, validacionData.comercioId);
+        const comercioDoc = await transaction.get(comercioRef);
+        if (comercioDoc.exists()) {
+          const comercioData = comercioDoc.data();
+          transaction.update(comercioRef, {
+            ingresosMensuales: (comercioData.ingresosMensuales || 0) + (montoCompra || 0)
+          });
+        }
 
+        // 6. Return success response
         return {
-          montoDescuento,
-          montoFinal,
-          codigoUso,
-          validacionData,
-          beneficioData,
+          success: true,
+          message: 'Beneficio aplicado exitosamente',
+          data: {
+            comercio: {
+              id: validacionData.comercioId,
+              nombre: validacionData.comercioNombre,
+              categoria: '',
+              direccion: ''
+            },
+            beneficio: {
+              id: beneficioId,
+              titulo: beneficioData.titulo,
+              descripcion: beneficioData.descripcion,
+              descuento: beneficioData.descuento,
+              tipo: beneficioData.tipo,
+              condiciones: beneficioData.condiciones
+            },
+            socio: {
+              id: validacionData.socioId,
+              nombre: validacionData.socioNombre,
+              numeroSocio: validacionData.socioNumero,
+              estadoMembresia: ''
+            },
+            validacion: {
+              id: validacionId,
+              fechaValidacion: validacionData.fechaValidacion?.toDate() || new Date(),
+              montoDescuento,
+              codigoValidacion: validacionData.codigoValidacion
+            }
+          }
         };
       });
 
-      // Update cliente statistics if benefit was used with a purchase
-      if (montoOriginal && montoOriginal > 0) {
-        try {
-          // Find cliente by socioId and comercioId
-          const clientesQuery = query(
-            collection(db, 'clientes'),
-            where('socioId', '==', result.validacionData.socioId),
-            where('comercioId', '==', result.validacionData.comercioId)
-          );
-          
-          const clientesSnapshot = await getDocs(clientesQuery);
-          if (!clientesSnapshot.empty) {
-            const clienteId = clientesSnapshot.docs[0].id;
-            await ClienteService.updateClienteCompra(clienteId, montoOriginal, true);
-          }
-        } catch (error) {
-          console.error('Error updating cliente compra:', error);
-          // No fallar el uso del beneficio por error en cliente
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Beneficio aplicado exitosamente',
-        data: {
-          montoDescuento: result.montoDescuento,
-          montoFinal: result.montoFinal,
-          codigoUso: result.codigoUso,
-        },
-      };
-
+      return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error al usar beneficio';
-      handleError(error, 'Use Benefit');
-      
+      console.error('Error using benefit:', error);
       return {
         success: false,
-        message: errorMessage,
+        message: error instanceof Error ? error.message : 'Error desconocido al aplicar el beneficio',
+        error: 'BENEFIT_USAGE_ERROR'
       };
     }
   }
@@ -439,41 +399,66 @@ class QRValidationService {
   /**
    * Get validation history for a socio
    */
-  async getValidationHistory(socioId: string): Promise<Array<{
-    id: string;
-    comercioNombre: string;
-    fechaValidacion: Date;
-    beneficiosDisponibles: number;
-    beneficioUsado?: string;
-    montoDescuento?: number;
-    codigoValidacion: string;
-  }>> {
+  async getValidationHistory(
+    socioId: string,
+    limitCount: number = 20,
+    lastDoc?: import('firebase/firestore').QueryDocumentSnapshot<import('firebase/firestore').DocumentData>
+  ): Promise<{
+    validaciones: Array<{
+      id: string;
+      comercioNombre: string;
+      fechaValidacion: Date;
+      beneficiosDisponibles: Array<{ id: string; titulo: string; descuento: number; tipo: string }>;
+      beneficioUsado: { id: string; titulo: string; descuento: number; tipo: string } | null;
+      montoDescuento: number;
+      codigoValidacion: string;
+    }>;
+    hasMore: boolean;
+    lastDoc: import('firebase/firestore').QueryDocumentSnapshot<import('firebase/firestore').DocumentData> | null;
+  }> {
     try {
-      const validacionesQuery = query(
+      let q = query(
         collection(db, this.validacionesCollection),
         where('socioId', '==', socioId),
-        where('resultado', '==', 'valido'),
-        // orderBy('fechaValidacion', 'desc'),
-        // limit(limit)
+        orderBy('fechaValidacion', 'desc')
       );
 
-      const snapshot = await getDocs(validacionesQuery);
-      
-      return snapshot.docs.map(doc => {
+      if (lastDoc) {
+        q = query(q, limit(limitCount + 1));
+      } else {
+        q = query(q, limit(limitCount + 1));
+      }
+
+      const snapshot = await getDocs(q);
+      const docs = snapshot.docs;
+      const hasMore = docs.length > limitCount;
+
+      if (hasMore) {
+        docs.pop();
+      }
+
+      const validaciones = docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
           comercioNombre: data.comercioNombre,
           fechaValidacion: data.fechaValidacion?.toDate() || new Date(),
-          beneficiosDisponibles: data.beneficiosDisponibles || 0,
-          beneficioUsado: data.beneficioTitulo,
-          montoDescuento: data.montoDescuento,
-          codigoValidacion: data.codigoValidacion,
+          beneficiosDisponibles: data.beneficiosDisponibles || [],
+          beneficioUsado: data.beneficioUsado,
+          montoDescuento: data.montoDescuento || 0,
+          codigoValidacion: data.codigoValidacion
         };
       });
+
+      return {
+        validaciones,
+        hasMore,
+        lastDoc: docs.length > 0 ? docs[docs.length - 1] : null
+      };
     } catch (error) {
+      console.error('Error getting validation history:', error);
       handleError(error, 'Get Validation History');
-      return [];
+      return { validaciones: [], hasMore: false, lastDoc: null };
     }
   }
 
@@ -488,54 +473,61 @@ class QRValidationService {
     beneficiosUsados: number;
   }> {
     try {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Get all validations for this comercio
       const validacionesQuery = query(
         collection(db, this.validacionesCollection),
-        where('comercioId', '==', comercioId),
-        where('resultado', '==', 'valido')
+        where('comercioId', '==', comercioId)
       );
+      const validacionesSnapshot = await getDocs(validacionesQuery);
+      const validaciones = validacionesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          socioId: data.socioId,
+          fechaValidacion: data.fechaValidacion?.toDate() || new Date(),
+          beneficioUsado: data.beneficioUsado || null
+        };
+      });
 
-      const snapshot = await getDocs(validacionesQuery);
-      const validaciones = snapshot.docs.map(doc => doc.data());
-
+      // Calculate stats
       const totalValidaciones = validaciones.length;
       
-      // Validaciones hoy
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const validacionesHoy = validaciones.filter(v => {
-        const fechaValidacion = v.fechaValidacion?.toDate();
-        return fechaValidacion && fechaValidacion >= hoy;
-      }).length;
-
-      // Validaciones este mes
-      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-      const validacionesMes = validaciones.filter(v => {
-        const fechaValidacion = v.fechaValidacion?.toDate();
-        return fechaValidacion && fechaValidacion >= inicioMes;
-      }).length;
-
-      // Clientes únicos
-      const sociosUnicos = new Set(validaciones.map(v => v.socioId));
-      const clientesUnicos = sociosUnicos.size;
-
-      // Beneficios usados
-      const beneficiosUsados = validaciones.filter(v => v.beneficioUsado).length;
+      const validacionesHoy = validaciones.filter(v => 
+        v.fechaValidacion >= startOfDay
+      ).length;
+      
+      const validacionesMes = validaciones.filter(v => 
+        v.fechaValidacion >= startOfMonth
+      ).length;
+      
+      const clientesUnicos = new Set(
+        validaciones.map(v => v.socioId)
+      ).size;
+      
+      const beneficiosUsados = validaciones.filter(v => 
+        v.beneficioUsado
+      ).length;
 
       return {
         totalValidaciones,
         validacionesHoy,
         validacionesMes,
         clientesUnicos,
-        beneficiosUsados,
+        beneficiosUsados
       };
     } catch (error) {
+      console.error('Error getting validation stats:', error);
       handleError(error, 'Get Validation Stats');
       return {
         totalValidaciones: 0,
         validacionesHoy: 0,
         validacionesMes: 0,
         clientesUnicos: 0,
-        beneficiosUsados: 0,
+        beneficiosUsados: 0
       };
     }
   }
@@ -565,39 +557,23 @@ class QRValidationService {
     return Math.random().toString(36).substr(2, 6).toUpperCase();
   }
 
-  private calculateDiscount(
-    beneficio: {
-      tipo: string;
-      descuento: number;
-    },
-    montoOriginal: number
-  ): { montoDescuento: number; montoFinal: number } {
-    let montoDescuento = 0;
+  private calculateDiscountAmount(
+    tipo: string,
+    descuento: number,
+    montoCompra?: number
+  ): number {
+    if (!montoCompra) return 0;
 
-    switch (beneficio.tipo) {
-      case 'descuento_porcentaje':
-        montoDescuento = (montoOriginal * beneficio.descuento) / 100;
-        break;
-      case 'descuento_fijo':
-        montoDescuento = Math.min(beneficio.descuento, montoOriginal);
-        break;
-      case '2x1':
-        montoDescuento = montoOriginal / 2;
-        break;
-      case 'envio_gratis':
-        // This would need to be calculated based on shipping cost
-        montoDescuento = 0;
-        break;
+    switch (tipo) {
+      case 'porcentaje':
+        return (montoCompra * descuento) / 100;
+      case 'monto_fijo':
+        return descuento;
+      case 'producto_gratis':
+        return 0; // No monetary discount for free product
       default:
-        montoDescuento = 0;
+        return 0;
     }
-
-    const montoFinal = Math.max(0, montoOriginal - montoDescuento);
-
-    return {
-      montoDescuento: Math.round(montoDescuento * 100) / 100,
-      montoFinal: Math.round(montoFinal * 100) / 100,
-    };
   }
 }
 
