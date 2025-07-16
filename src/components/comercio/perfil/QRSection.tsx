@@ -43,6 +43,7 @@ import { useComercios } from '@/hooks/useComercios';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
+import { QR_CONFIG } from '@/lib/constants';
 
 export const QRSection: React.FC = () => {
   const theme = useTheme();
@@ -57,9 +58,10 @@ export const QRSection: React.FC = () => {
   // Select the first linked comercio as the active one (or adjust as needed)
   const comercio = comerciosVinculados && comerciosVinculados.length > 0 ? comerciosVinculados[0] : undefined;
 
-  // Generate QR URLs based on comercio data
+  // Generate QR URLs based on comercio data - FIXED to use production URL
   const generateQRUrl = () => comercio ? `fidelya://${comercio.id}` : '';
-  const generateWebUrl = () => comercio ? `https://fidelya.com/validar/${comercio.id}` : '';
+  const generateWebUrl = () => comercio ? `${QR_CONFIG.baseUrl}/validar-beneficio?comercio=${comercio.id}` : '';
+  
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [webQrDataUrl, setWebQrDataUrl] = useState<string>('');
@@ -70,8 +72,9 @@ export const QRSection: React.FC = () => {
 
   // Generate QR validation URLs
   const qrUrl = generateQRUrl(); // fidelya:// protocol for app scanning
-  const webUrl = generateWebUrl(); // http:// protocol for web access
+  const webUrl = generateWebUrl(); // production URL for web access
 
+  // ... rest of the component remains the same
   const generateQRCode = async (type: 'app' | 'web' | 'both' = 'both') => {
     try {
       setGenerating(true);
@@ -91,7 +94,7 @@ export const QRSection: React.FC = () => {
       }
 
       if (type === 'web' || type === 'both') {
-        // Generate QR for web access (http:// protocol) as fallback
+        // Generate QR for web access (production URL) as fallback
         const webQrDataUrl = await QRCode.toDataURL(webUrl, {
           width: 400,
           margin: 2,
@@ -1127,7 +1130,7 @@ export const QRSection: React.FC = () => {
           <Typography variant="body1" sx={{ color: '#64748b', mb: 1 }}>
             {activeQRType === 'app' ? 'Para aplicación móvil' : 'Para acceso web'}
           </Typography>
-                    <Typography variant="body2" sx={{ color: '#64748b', mb: 4 }}>
+          <Typography variant="body2" sx={{ color: '#64748b', mb: 4 }}>
             Escanea este código para validar beneficios
           </Typography>
 
@@ -1198,4 +1201,3 @@ export const QRSection: React.FC = () => {
     </>
   );
 };
-

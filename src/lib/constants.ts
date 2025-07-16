@@ -20,6 +20,19 @@ export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];
 
 // Helper function to get the correct base URL
 const getBaseUrl = (): string => {
+  // Siempre usar la URL de producción para QR codes
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+  }
+  // Fallback para producción
+  return 'https://fidelya.vercel.app';
+};
+
+// Helper function to get the development URL (for non-QR purposes)
+const getDevUrl = (): string => {
   // In production, use the environment variable or Vercel URL
   if (process.env.NODE_ENV === 'production') {
     if (process.env.NEXT_PUBLIC_APP_URL) {
@@ -41,7 +54,7 @@ export const APP_CONFIG = {
   name: 'Fidelya',
   version: '1.0.0',
   description: 'Sistema de Gestión de Socios y Beneficios',
-  url: getBaseUrl(),
+  url: getDevUrl(), // Usar getDevUrl para la URL de la app
   supportEmail: 'soporte@fidelya.com',
   maxFileSize: 5 * 1024 * 1024, // 5MB
   allowedImageTypes: ['image/jpeg', 'image/png', 'image/webp'],
@@ -136,7 +149,7 @@ export const QR_CONFIG = {
     light: '#FFFFFF',
   },
   errorCorrectionLevel: 'M' as const,
-  baseUrl: getBaseUrl(),
+  baseUrl: getBaseUrl(), // Usar getBaseUrl para QR codes (siempre URL de producción)
   validationPath: '/validar-beneficio',
   // Enhanced QR options for better quality and CORS handling
   quality: 0.92,
@@ -323,5 +336,5 @@ export const getCurrentUrl = (): string => {
   if (typeof window !== 'undefined') {
     return `${window.location.protocol}//${window.location.host}`;
   }
-  return getBaseUrl();
+  return getDevUrl();
 };
