@@ -18,17 +18,23 @@ export const COLLECTIONS = {
 // Export type for collection names
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];
 
-// Helper function to get the correct base URL
+// Helper function to get the correct base URL - DETECTA AUTOMÁTICAMENTE EL DOMINIO
 const getBaseUrl = (): string => {
-  // Siempre usar la URL de producción para QR codes
+  // En el cliente (navegador), usar el dominio actual
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.host}`;
+  }
+  
+  // En el servidor, usar variables de entorno o fallback
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL;
   }
   if (process.env.NEXT_PUBLIC_VERCEL_URL) {
     return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
   }
-  // Fallback para producción
-  return 'https://fidelya.vercel.app';
+  
+  // Fallback para desarrollo
+  return 'http://localhost:3001';
 };
 
 // Helper function to get the development URL (for non-QR purposes)
@@ -149,7 +155,7 @@ export const QR_CONFIG = {
     light: '#FFFFFF',
   },
   errorCorrectionLevel: 'M' as const,
-  baseUrl: getBaseUrl(), // Usar getBaseUrl para QR codes (siempre URL de producción)
+  baseUrl: getBaseUrl(), // DETECTA AUTOMÁTICAMENTE EL DOMINIO ACTUAL
   validationPath: '/validar-beneficio',
   // Enhanced QR options for better quality and CORS handling
   quality: 0.92,
@@ -331,10 +337,15 @@ export const validateCorsConfig = () => {
   };
 };
 
-// Helper function to get the current URL (client-side only)
+// Helper function to get the current URL (client-side only) - FUNCIÓN PARA DETECTAR DOMINIO ACTUAL
 export const getCurrentUrl = (): string => {
   if (typeof window !== 'undefined') {
     return `${window.location.protocol}//${window.location.host}`;
   }
   return getDevUrl();
+};
+
+// Función para obtener la URL base dinámicamente (para usar en componentes)
+export const getDynamicBaseUrl = (): string => {
+  return getBaseUrl();
 };

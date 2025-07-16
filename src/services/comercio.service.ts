@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG } from '@/lib/constants';
+import { COLLECTIONS, QR_CONFIG, STORAGE_CONFIG, getDynamicBaseUrl } from '@/lib/constants';
 import { handleError } from '@/lib/error-handler';
 import QRCode from 'qrcode';
 
@@ -108,12 +108,11 @@ class ComercioService {
   private readonly beneficiosCollection = COLLECTIONS.BENEFICIOS;
 
   /**
-   * Get the correct base URL for QR generation
+   * Get the correct base URL for QR generation - DETECTA AUTOMÁTICAMENTE EL DOMINIO
    */
   private getQRBaseUrl(): string {
-    // Siempre usar la URL de producción configurada en QR_CONFIG.baseUrl
-    // en lugar de window.location.origin para evitar URLs de localhost
-    return QR_CONFIG.baseUrl;
+    // Usar la función que detecta automáticamente el dominio actual
+    return getDynamicBaseUrl();
   }
 
   /**

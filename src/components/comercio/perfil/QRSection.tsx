@@ -43,7 +43,7 @@ import { useComercios } from '@/hooks/useComercios';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
-import { QR_CONFIG } from '@/lib/constants';
+import { getDynamicBaseUrl } from '@/lib/constants';
 
 export const QRSection: React.FC = () => {
   const theme = useTheme();
@@ -51,16 +51,15 @@ export const QRSection: React.FC = () => {
   
   const {
     comerciosVinculados,
-    // ...other properties from useComercios if needed
   } = useComercios();
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
 
   // Select the first linked comercio as the active one (or adjust as needed)
   const comercio = comerciosVinculados && comerciosVinculados.length > 0 ? comerciosVinculados[0] : undefined;
 
-  // Generate QR URLs based on comercio data - FIXED to use production URL
+  // Generate QR URLs based on comercio data - USA DETECCIÓN AUTOMÁTICA DEL DOMINIO
   const generateQRUrl = () => comercio ? `fidelya://${comercio.id}` : '';
-  const generateWebUrl = () => comercio ? `${QR_CONFIG.baseUrl}/validar-beneficio?comercio=${comercio.id}` : '';
+  const generateWebUrl = () => comercio ? `${getDynamicBaseUrl()}/validar-beneficio?comercio=${comercio.id}` : '';
   
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
