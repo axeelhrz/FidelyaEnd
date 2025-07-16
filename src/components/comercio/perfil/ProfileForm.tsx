@@ -22,6 +22,8 @@ import {
   alpha,
   Paper,
   CircularProgress,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Store,
@@ -68,6 +70,9 @@ type ComercioProfileFormData = {
 import { CATEGORIAS_COMERCIO } from '@/types/comercio';
 
 export const ProfileForm: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const { comercio, loading, updateProfile, error, clearError } = useComercio();
   const [isEditing, setIsEditing] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -226,7 +231,7 @@ export const ProfileForm: React.FC = () => {
 
   if (loading && !comercio) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: { xs: 4, md: 8 } }}>
         <Stack alignItems="center" spacing={2}>
           <CircularProgress size={40} sx={{ color: '#06b6d4' }} />
           <Typography variant="body2" sx={{ color: '#64748b' }}>
@@ -248,7 +253,7 @@ export const ProfileForm: React.FC = () => {
         sx={{
           background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
           border: '1px solid #e2e8f0',
-          borderRadius: 4,
+          borderRadius: { xs: 2, md: 4 },
           overflow: 'hidden',
           position: 'relative',
         }}
@@ -259,8 +264,8 @@ export const ProfileForm: React.FC = () => {
             position: 'absolute',
             top: 0,
             right: 0,
-            width: 200,
-            height: 200,
+            width: { xs: 100, md: 200 },
+            height: { xs: 100, md: 200 },
             background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
             borderRadius: '50%',
             opacity: 0.05,
@@ -268,30 +273,51 @@ export const ProfileForm: React.FC = () => {
           }}
         />
 
-        <CardContent sx={{ p: 6, position: 'relative', zIndex: 1 }}>
+        <CardContent sx={{ p: { xs: 3, sm: 4, md: 6 }, position: 'relative', zIndex: 1 }}>
           {/* Header */}
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 6 }}>
-            <Box>
+          <Stack 
+            direction={{ xs: 'column', md: 'row' }} 
+            justifyContent="space-between" 
+            alignItems={{ xs: 'flex-start', md: 'center' }} 
+            spacing={{ xs: 3, md: 0 }}
+            sx={{ mb: { xs: 4, md: 6 } }}
+          >
+            <Box sx={{ width: { xs: '100%', md: 'auto' } }}>
               <Typography 
-                variant="h4" 
+                variant={isMobile ? "h5" : "h4"}
                 sx={{ 
                   fontWeight: 900, 
                   color: '#0f172a',
                   mb: 1,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 2
+                  gap: { xs: 1, md: 2 },
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  textAlign: { xs: 'center', sm: 'left' }
                 }}
               >
-                <Store sx={{ fontSize: 32, color: '#6366f1' }} />
+                <Store sx={{ fontSize: { xs: 24, md: 32 }, color: '#6366f1' }} />
                 Información General
               </Typography>
-              <Typography variant="body1" sx={{ color: '#64748b', fontWeight: 500 }}>
+              <Typography 
+                variant="body1" 
+                sx={{ 
+                  color: '#64748b', 
+                  fontWeight: 500,
+                  textAlign: { xs: 'center', sm: 'left' },
+                  maxWidth: { xs: '100%', md: '80%' }
+                }}
+              >
                 Mantén actualizada la información de tu comercio para que los socios puedan encontrarte fácilmente.
               </Typography>
             </Box>
 
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack 
+              direction={{ xs: 'column', sm: 'row' }} 
+              spacing={2} 
+              alignItems="center"
+              sx={{ width: { xs: '100%', md: 'auto' } }}
+            >
               <AnimatePresence>
                 {hasChanges && (
                   <motion.div
@@ -330,12 +356,18 @@ export const ProfileForm: React.FC = () => {
               </AnimatePresence>
 
               {isEditing ? (
-                <Stack direction="row" spacing={2}>
+                <Stack 
+                  direction={{ xs: 'column', sm: 'row' }} 
+                  spacing={2}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                >
                   <Button
                     variant="outlined"
                     onClick={handleReset}
                     startIcon={<Refresh />}
                     disabled={isSubmitting}
+                    fullWidth={isMobile}
+                    size={isMobile ? "medium" : "large"}
                     sx={{
                       borderColor: '#d1d5db',
                       color: '#6b7280',
@@ -352,6 +384,8 @@ export const ProfileForm: React.FC = () => {
                     onClick={handleSubmit(onSubmit)}
                     disabled={isSubmitting || !hasChanges}
                     startIcon={isSubmitting ? <CircularProgress size={16} /> : <Save />}
+                    fullWidth={isMobile}
+                    size={isMobile ? "medium" : "large"}
                     sx={{
                       background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                       boxShadow: '0 4px 20px rgba(99, 102, 241, 0.3)',
@@ -374,6 +408,8 @@ export const ProfileForm: React.FC = () => {
                   variant="contained"
                   onClick={handleEditToggle}
                   startIcon={<Store />}
+                  fullWidth={isMobile}
+                  size={isMobile ? "medium" : "large"}
                   sx={{
                     background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     boxShadow: '0 4px 20px rgba(99, 102, 241, 0.3)',
@@ -401,7 +437,7 @@ export const ProfileForm: React.FC = () => {
                 <Alert 
                   severity="error" 
                   onClose={clearError}
-                  sx={{ borderRadius: 3 }}
+                  sx={{ borderRadius: { xs: 2, md: 3 } }}
                 >
                   {error}
                 </Alert>
@@ -410,27 +446,32 @@ export const ProfileForm: React.FC = () => {
           </AnimatePresence>
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            <Stack spacing={6}>
+            <Stack spacing={{ xs: 4, md: 6 }}>
               {/* Basic Information */}
               <Box>
                 <Typography 
-                  variant="h6" 
+                  variant={isMobile ? "subtitle1" : "h6"}
                   sx={{ 
                     fontWeight: 700, 
                     color: '#374151', 
-                    mb: 3,
+                    mb: { xs: 2, md: 3 },
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1
+                    gap: 1,
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    textAlign: { xs: 'center', sm: 'left' }
                   }}
                 >
-                  <Business sx={{ fontSize: 20, color: '#6366f1' }} />
+                  <Business sx={{ fontSize: { xs: 18, md: 20 }, color: '#6366f1' }} />
                   Datos Generales
                 </Typography>
                 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                <Stack spacing={{ xs: 3, md: 4 }}>
+                  <Stack 
+                    direction={{ xs: 'column', md: 'row' }} 
+                    spacing={{ xs: 3, md: 3 }}
+                  >
+                    <Box sx={{ flex: 1 }}>
                       <TextField
                         {...register('nombreComercio', { 
                           required: 'El nombre comercial es requerido',
@@ -441,12 +482,13 @@ export const ProfileForm: React.FC = () => {
                         disabled={!isEditing}
                         error={!!errors.nombreComercio}
                         helperText={errors.nombreComercio?.message}
+                        size={isMobile ? "medium" : "medium"}
                         InputProps={{
                           startAdornment: <Store sx={{ color: '#94a3b8', mr: 1 }} />,
                         }}
                         sx={{
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 3,
+                            borderRadius: { xs: 2, md: 3 },
                             '&.Mui-focused fieldset': {
                               borderColor: '#6366f1',
                               borderWidth: 2,
@@ -456,7 +498,7 @@ export const ProfileForm: React.FC = () => {
                       />
                     </Box>
                     
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                    <Box sx={{ flex: 1 }}>
                       <Controller
                         name="categoria"
                         control={control}
@@ -467,9 +509,10 @@ export const ProfileForm: React.FC = () => {
                             <Select
                               {...field}
                               label="Rubro o Categoría"
+                              size={isMobile ? "medium" : "medium"}
                               startAdornment={<Category sx={{ color: '#94a3b8', mr: 1 }} />}
                               sx={{
-                                borderRadius: 3,
+                                borderRadius: { xs: 2, md: 3 },
                                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                   borderColor: '#6366f1',
                                   borderWidth: 2,
@@ -491,10 +534,13 @@ export const ProfileForm: React.FC = () => {
                         )}
                       />
                     </Box>
-                  </Box>
+                  </Stack>
 
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                  <Stack 
+                    direction={{ xs: 'column', md: 'row' }} 
+                    spacing={{ xs: 3, md: 3 }}
+                  >
+                    <Box sx={{ flex: 1 }}>
                       <TextField
                         {...register('cuit')}
                         label="RUT / CUIT"
@@ -503,12 +549,13 @@ export const ProfileForm: React.FC = () => {
                         placeholder="12-34567890-1"
                         error={!!errors.cuit}
                         helperText={errors.cuit?.message}
+                        size={isMobile ? "medium" : "medium"}
                         InputProps={{
                           startAdornment: <Description sx={{ color: '#94a3b8', mr: 1 }} />,
                         }}
                         sx={{
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 3,
+                            borderRadius: { xs: 2, md: 3 },
                             '&.Mui-focused fieldset': {
                               borderColor: '#6366f1',
                               borderWidth: 2,
@@ -518,7 +565,7 @@ export const ProfileForm: React.FC = () => {
                       />
                     </Box>
 
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                    <Box sx={{ flex: 1 }}>
                       <Controller
                         name="visible"
                         control={control}
@@ -526,12 +573,13 @@ export const ProfileForm: React.FC = () => {
                           <Paper
                             elevation={0}
                             sx={{
-                              p: 3,
+                              p: { xs: 2, md: 3 },
                               border: '1px solid #e2e8f0',
-                              borderRadius: 3,
+                              borderRadius: { xs: 2, md: 3 },
                               height: '100%',
                               display: 'flex',
                               alignItems: 'center',
+                              minHeight: { xs: 56, md: 56 }
                             }}
                           >
                             <FormControlLabel
@@ -563,8 +611,8 @@ export const ProfileForm: React.FC = () => {
                         )}
                       />
                     </Box>
-                  </Box>
-                </Box>
+                  </Stack>
+                </Stack>
               </Box>
 
               <Divider sx={{ opacity: 0.3 }} />
@@ -572,21 +620,23 @@ export const ProfileForm: React.FC = () => {
               {/* Contact Information */}
               <Box>
                 <Typography 
-                  variant="h6" 
+                  variant={isMobile ? "subtitle1" : "h6"}
                   sx={{ 
                     fontWeight: 700, 
                     color: '#374151', 
-                    mb: 3,
+                    mb: { xs: 2, md: 3 },
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1
+                    gap: 1,
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    textAlign: { xs: 'center', sm: 'left' }
                   }}
                 >
-                  <Phone sx={{ fontSize: 20, color: '#06b6d4' }} />
+                  <Phone sx={{ fontSize: { xs: 18, md: 20 }, color: '#06b6d4' }} />
                   Información de Contacto
                 </Typography>
                 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <Stack spacing={{ xs: 3, md: 4 }}>
                   <TextField
                     {...register('email', { 
                       required: 'El email es requerido',
@@ -601,12 +651,13 @@ export const ProfileForm: React.FC = () => {
                     disabled={!isEditing}
                     error={!!errors.email}
                     helperText={errors.email?.message}
+                    size={isMobile ? "medium" : "medium"}
                     InputProps={{
                       startAdornment: <Email sx={{ color: '#94a3b8', mr: 1 }} />,
                     }}
                     sx={{
                       '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
+                        borderRadius: { xs: 2, md: 3 },
                         '&.Mui-focused fieldset': {
                           borderColor: '#06b6d4',
                           borderWidth: 2,
@@ -615,8 +666,11 @@ export const ProfileForm: React.FC = () => {
                     }}
                   />
 
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                  <Stack 
+                    direction={{ xs: 'column', md: 'row' }} 
+                    spacing={{ xs: 3, md: 3 }}
+                  >
+                    <Box sx={{ flex: 1 }}>
                       <TextField
                         {...register('telefono', {
                           pattern: {
@@ -630,12 +684,13 @@ export const ProfileForm: React.FC = () => {
                         error={!!errors.telefono}
                         helperText={errors.telefono?.message}
                         placeholder="+598 99 123 456"
+                        size={isMobile ? "medium" : "medium"}
                         InputProps={{
                           startAdornment: <Phone sx={{ color: '#94a3b8', mr: 1 }} />,
                         }}
                         sx={{
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 3,
+                            borderRadius: { xs: 2, md: 3 },
                             '&.Mui-focused fieldset': {
                               borderColor: '#06b6d4',
                               borderWidth: 2,
@@ -645,7 +700,7 @@ export const ProfileForm: React.FC = () => {
                       />
                     </Box>
                     
-                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                    <Box sx={{ flex: 1 }}>
                       <TextField
                         {...register('horario')}
                         label="Horarios de Atención"
@@ -654,12 +709,13 @@ export const ProfileForm: React.FC = () => {
                         placeholder="Lunes a Viernes - 9 a 18 hs"
                         error={!!errors.horario}
                         helperText={errors.horario?.message}
+                        size={isMobile ? "medium" : "medium"}
                         InputProps={{
                           startAdornment: <Schedule sx={{ color: '#94a3b8', mr: 1 }} />,
                         }}
                         sx={{
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 3,
+                            borderRadius: { xs: 2, md: 3 },
                             '&.Mui-focused fieldset': {
                               borderColor: '#06b6d4',
                               borderWidth: 2,
@@ -668,7 +724,7 @@ export const ProfileForm: React.FC = () => {
                         }}
                       />
                     </Box>
-                  </Box>
+                  </Stack>
 
                   <TextField
                     {...register('direccion', {
@@ -679,12 +735,13 @@ export const ProfileForm: React.FC = () => {
                     disabled={!isEditing}
                     error={!!errors.direccion}
                     helperText={errors.direccion?.message}
+                    size={isMobile ? "medium" : "medium"}
                     InputProps={{
                       startAdornment: <LocationOn sx={{ color: '#94a3b8', mr: 1 }} />,
                     }}
                     sx={{
                       '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
+                        borderRadius: { xs: 2, md: 3 },
                         '&.Mui-focused fieldset': {
                           borderColor: '#06b6d4',
                           borderWidth: 2,
@@ -692,7 +749,7 @@ export const ProfileForm: React.FC = () => {
                       }
                     }}
                   />
-                </Box>
+                </Stack>
               </Box>
 
               <Divider sx={{ opacity: 0.3 }} />
@@ -700,17 +757,19 @@ export const ProfileForm: React.FC = () => {
               {/* Description */}
               <Box>
                 <Typography 
-                  variant="h6" 
+                  variant={isMobile ? "subtitle1" : "h6"}
                   sx={{ 
                     fontWeight: 700, 
                     color: '#374151', 
-                    mb: 3,
+                    mb: { xs: 2, md: 3 },
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1
+                    gap: 1,
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    textAlign: { xs: 'center', sm: 'left' }
                   }}
                 >
-                  <Description sx={{ fontSize: 20, color: '#10b981' }} />
+                  <Description sx={{ fontSize: { xs: 18, md: 20 }, color: '#10b981' }} />
                   Descripción y Presentación
                 </Typography>
                 
@@ -724,14 +783,15 @@ export const ProfileForm: React.FC = () => {
                   label="Descripción del Comercio"
                   fullWidth
                   multiline
-                  rows={4}
+                  rows={isMobile ? 3 : 4}
                   disabled={!isEditing}
                   placeholder="Describe tu comercio, productos o servicios que ofreces a los socios de Fidelitá..."
                   helperText={`${watchedFields.descripcion?.length || 0}/500 caracteres. Esta descripción será visible para los socios.`}
                   error={!!errors.descripcion}
+                  size={isMobile ? "medium" : "medium"}
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
+                      borderRadius: { xs: 2, md: 3 },
                       '&.Mui-focused fieldset': {
                         borderColor: '#10b981',
                         borderWidth: 2,
@@ -746,17 +806,19 @@ export const ProfileForm: React.FC = () => {
               {/* Online Presence */}
               <Box>
                 <Typography 
-                  variant="h6" 
+                  variant={isMobile ? "subtitle1" : "h6"}
                   sx={{ 
                     fontWeight: 700, 
                     color: '#374151', 
-                    mb: 3,
+                    mb: { xs: 2, md: 3 },
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1
+                    gap: 1,
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    textAlign: { xs: 'center', sm: 'left' }
                   }}
                 >
-                  <Language sx={{ fontSize: 20, color: '#f59e0b' }} />
+                  <Language sx={{ fontSize: { xs: 18, md: 20 }, color: '#f59e0b' }} />
                   Presencia Online
                 </Typography>
                 
@@ -773,12 +835,13 @@ export const ProfileForm: React.FC = () => {
                   placeholder="https://www.micomercio.com"
                   error={!!errors.sitioWeb}
                   helperText={errors.sitioWeb?.message}
+                  size={isMobile ? "medium" : "medium"}
                   InputProps={{
                     startAdornment: <Language sx={{ color: '#94a3b8', mr: 1 }} />,
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
+                      borderRadius: { xs: 2, md: 3 },
                       '&.Mui-focused fieldset': {
                         borderColor: '#f59e0b',
                         borderWidth: 2,
@@ -801,21 +864,27 @@ export const ProfileForm: React.FC = () => {
             exit={{ opacity: 0, y: -20, scale: 0.9 }}
             style={{ 
               position: 'fixed', 
-              bottom: 24, 
-              right: 24, 
+              bottom: isMobile ? 16 : 24, 
+              right: isMobile ? 16 : 24, 
+              left: isMobile ? 16 : 'auto',
               zIndex: 1000,
-              maxWidth: 400
+              maxWidth: isMobile ? 'auto' : 400
             }}
           >
             <Alert
               severity="warning"
               action={
-                <Stack direction="row" spacing={1}>
+                <Stack 
+                  direction={{ xs: 'column', sm: 'row' }} 
+                  spacing={1}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                >
                   <Button
                     color="inherit"
                     size="small"
                     onClick={handleReset}
                     disabled={isSubmitting}
+                    fullWidth={isMobile}
                   >
                     Descartar
                   </Button>
@@ -826,6 +895,7 @@ export const ProfileForm: React.FC = () => {
                     onClick={handleSubmit(onSubmit)}
                     disabled={isSubmitting}
                     startIcon={isSubmitting ? <CircularProgress size={12} /> : undefined}
+                    fullWidth={isMobile}
                   >
                     {isSubmitting ? 'Guardando...' : 'Guardar'}
                   </Button>
@@ -833,9 +903,15 @@ export const ProfileForm: React.FC = () => {
               }
               sx={{
                 boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                borderRadius: 3,
+                borderRadius: { xs: 2, md: 3 },
                 bgcolor: '#fff3cd',
                 border: '1px solid #ffeaa7',
+                flexDirection: { xs: 'column', sm: 'row' },
+                '& .MuiAlert-action': {
+                  width: { xs: '100%', sm: 'auto' },
+                  mt: { xs: 1, sm: 0 },
+                  ml: { xs: 0, sm: 'auto' }
+                }
               }}
             >
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -864,6 +940,7 @@ export const ProfileForm: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 9999,
+              padding: isMobile ? '1rem' : '2rem'
             }}
           >
             <motion.div
@@ -872,17 +949,19 @@ export const ProfileForm: React.FC = () => {
               exit={{ scale: 0.8, opacity: 0 }}
               style={{
                 backgroundColor: 'white',
-                padding: '2rem',
-                borderRadius: '1rem',
+                padding: isMobile ? '1.5rem' : '2rem',
+                borderRadius: isMobile ? '0.5rem' : '1rem',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: '1rem',
                 boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                maxWidth: isMobile ? '90vw' : 'auto',
+                textAlign: 'center'
               }}
             >
               <CircularProgress size={40} sx={{ color: '#6366f1' }} />
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#374151' }}>
+              <Typography variant={isMobile ? "body1" : "h6"} sx={{ fontWeight: 600, color: '#374151' }}>
                 Guardando cambios...
               </Typography>
               <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center' }}>

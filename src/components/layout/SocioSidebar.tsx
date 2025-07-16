@@ -10,8 +10,6 @@ import {
   History,
   LogOut,
   ChevronRight,
-  AlertCircle,
-  CheckCircle,
   Bell,
   HelpCircle,
   Star,
@@ -190,41 +188,6 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
     return pathname === item.route || activeSection === item.id;
   }, [pathname, activeSection]);
 
-  // Get membership status
-  const membershipStatus = useMemo(() => {
-    const estado = realtimeStats.estadoMembresia;
-    switch (estado) {
-      case 'al_dia':
-        return { 
-          color: 'text-emerald-600 bg-emerald-50 border-emerald-200', 
-          text: 'Activo', 
-          icon: CheckCircle,
-          dot: 'bg-emerald-500'
-        };
-      case 'vencido':
-        return { 
-          color: 'text-red-600 bg-red-50 border-red-200', 
-          text: 'Vencido', 
-          icon: AlertCircle,
-          dot: 'bg-red-500'
-        };
-      case 'pendiente':
-        return { 
-          color: 'text-amber-600 bg-amber-50 border-amber-200', 
-          text: 'Pendiente', 
-          icon: AlertCircle,
-          dot: 'bg-amber-500'
-        };
-      default:
-        return { 
-          color: 'text-gray-600 bg-gray-50 border-gray-200', 
-          text: 'Desconocido', 
-          icon: AlertCircle,
-          dot: 'bg-gray-500'
-        };
-    }
-  }, [realtimeStats.estadoMembresia]);
-
   // Loading skeleton
   if (socioLoading) {
     return (
@@ -270,7 +233,7 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
                 <User className="w-5 h-5 text-white" />
               </div>
-              <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${membershipStatus.dot} rounded-full border-2 border-white`}></div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
             </div>
             
             {open && (
@@ -278,10 +241,6 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
                 <h2 className="text-base font-semibold text-gray-900 truncate">
                   {socio?.nombre || user?.nombre || 'Socio'}
                 </h2>
-                <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${membershipStatus.color}`}>
-                  <membershipStatus.icon className="w-2.5 h-2.5 mr-1" />
-                  {membershipStatus.text}
-                </div>
               </div>
             )}
             

@@ -14,13 +14,14 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
   onBack, 
   email: propEmail 
 }) => {
-  const { email, resendVerification } = useEmailVerification();
+  const { email, resendVerification, checkVerification } = useEmailVerification();
   const [isResending, setIsResending] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   const displayEmail = propEmail || email;
 
@@ -79,6 +80,29 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
       toast.error('Error al enviar email de verificación');
     } finally {
       setIsResending(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setIsCheckingVerification(true);
+    try {
+      const isVerified = await checkVerification();
+      
+      if (isVerified) {
+        toast.success('¡Email verificado exitosamente! Redirigiendo...');
+        
+        // Redirect to login with verification success
+        setTimeout(() => {
+          window.location.href = '/auth/login?verified=true';
+        }, 1500);
+      } else {
+        toast.error('El email aún no está verificado. Revisa tu bandeja de entrada.');
+      }
+    } catch (error) {
+      console.error('Error checking verification:', error);
+      toast.error('Error al verificar el estado del email');
+    } finally {
+      setIsCheckingVerification(false);
     }
   };
 
@@ -176,7 +200,7 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
                 {[
                   { step: 1, text: 'Revisa tu bandeja de entrada y la carpeta de spam' },
                   { step: 2, text: 'Haz clic en el enlace "Verificar email" en el mensaje' },
-                  { step: 3, text: 'Regresa aquí e inicia sesión con tu cuenta verificada' }
+                  { step: 3, text: 'Regresa aquí y verifica que tu email fue confirmado' }
                 ].map((instruction, index) => (
                   <div 
                     key={instruction.step}
@@ -195,6 +219,33 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
                     </p>
                   </div>
                 ))}
+              </div>
+
+              {/* Check Verification Button */}
+              <div className="mb-6">
+                <button
+                  onClick={handleCheckVerification}
+                  disabled={isCheckingVerification}
+                  className={`
+                    w-full inline-flex items-center justify-center space-x-3 px-8 py-4 rounded-2xl font-semibold text-base transition-all duration-500 transform hover:scale-105 disabled:hover:scale-100 shadow-lg hover:shadow-xl font-jakarta
+                    ${!isCheckingVerification
+                      ? 'bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 text-white hover:shadow-green-500/40 hover:-translate-y-1'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    }
+                  `}
+                >
+                  {isCheckingVerification ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span>Verificando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Ya verifiqué mi email</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Enhanced Resend Section */}

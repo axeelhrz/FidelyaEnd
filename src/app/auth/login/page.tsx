@@ -20,6 +20,7 @@ import {
   Clock,
   AlertCircle,
   Key,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth';
@@ -29,7 +30,7 @@ import { EmailVerification } from '@/components/auth/EmailVerification';
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, loading, error, clearError, resetPassword } = useAuth();
+  const { signIn, loading, error, clearError, resetPassword, checkEmailVerification } = useAuth();
   
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +40,7 @@ export default function LoginPage() {
   const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [isVisible, setIsVisible] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   // Trigger visibility for staggered animations
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function LoginPage() {
     formState: { errors },
     setError,
     clearErrors,
+    getValues,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
@@ -156,6 +159,29 @@ export default function LoginPage() {
       toast.error('Error al enviar el enlace de recuperación');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  // Function to check email verification and retry login
+  const handleCheckVerificationAndRetry = async () => {
+    setIsCheckingVerification(true);
+    try {
+      const isVerified = await checkEmailVerification();
+      
+      if (isVerified) {
+        toast.success('¡Email verificado! Intentando iniciar sesión...');
+        
+        // Get current form values and retry login
+        const formData = getValues();
+        await handleLogin(formData);
+      } else {
+        toast.error('El email aún no está verificado. Revisa tu bandeja de entrada.');
+      }
+    } catch (error) {
+      console.error('🔐 Error checking verification:', error);
+      toast.error('Error al verificar el estado del email');
+    } finally {
+      setIsCheckingVerification(false);
     }
   };
 
@@ -395,21 +421,48 @@ export default function LoginPage() {
                   )}
                 </AnimatePresence>
 
-                {/* Enhanced Error Alert */}
+                {/* Enhanced Error Alert with verification check option */}
                 <AnimatePresence>
                   {(errors.root || error) && (
                     <motion.div
                       initial={{ opacity: 0, y: -10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                      className="p-4 bg-red-50/90 backdrop-blur-sm border border-red-200/50 rounded-2xl flex items-center space-x-3 shadow-lg"
+                      className="p-4 bg-red-50/90 backdrop-blur-sm border border-red-200/50 rounded-2xl shadow-lg"
                     >
-                      <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                        <AlertCircle className="w-5 h-5 text-red-600" />
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        </div>
+                        <p className="text-red-800 font-medium text-sm font-jakarta flex-1">
+                          {errors.root?.message || error}
+                        </p>
                       </div>
-                      <p className="text-red-800 font-medium text-sm font-jakarta">
-                        {errors.root?.message || error}
-                      </p>
+                      
+                      {/* Show verification check button if error mentions email verification */}
+                      {((errors.root?.message || error || '').includes('verificar') || 
+                        (errors.root?.message || error || '').includes('verification')) && (
+                        <div className="mt-3 pt-3 border-t border-red-200">
+                          <button
+                            type="button"
+                            onClick={handleCheckVerificationAndRetry}
+                            disabled={isCheckingVerification}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold flex items-center justify-center space-x-2"
+                          >
+                            {isCheckingVerification ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Verificando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                <span>Ya verifiqué mi email</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -492,4 +545,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

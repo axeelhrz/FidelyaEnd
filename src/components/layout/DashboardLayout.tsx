@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DashboardSidebar } from './DashboardSidebar';
-import { Menu, ArrowUp, X } from 'lucide-react';
+import { ArrowUp, X } from 'lucide-react';
 import SmoothPageTransition from './SmoothPageTransition';
 
 interface SidebarProps {
@@ -119,52 +119,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      {isMobile && (
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm lg:hidden">
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleSidebarToggle}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <Menu className="w-6 h-6 text-gray-600" />
-                </button>
-                
-                <div>
-                  <h1 className="text-lg font-semibold text-gray-900">
-                    Fidelya
-                  </h1>
-                  <p className="text-sm text-gray-500">Panel de Control</p>
-                </div>
-              </div>
-              
-              {/* Mobile Quick Actions */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleMenuClick('beneficios')}
-                  className="p-2 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={() => handleMenuClick('validaciones')}
-                  className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Layout Container */}
       <div className="flex min-h-screen">
         {/* Mobile Sidebar Backdrop */}

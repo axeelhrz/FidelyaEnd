@@ -76,7 +76,7 @@ const ComercioPerfilContent: React.FC = () => {
           />
         )}
       >
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen p-4">
           <div className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-2xl flex items-center justify-center">
               <RefreshCw size={32} className="text-blue-500 animate-spin" />
@@ -102,28 +102,29 @@ const ComercioPerfilContent: React.FC = () => {
       )}
     >
       <motion.div
-        className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
+        className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-gray-900 via-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+        <div className="mb-6 md:mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 md:mb-6">
+            <div className="text-center lg:text-left">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black bg-gradient-to-r from-gray-900 via-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
                 Mi Perfil
               </h1>
-              <p className="text-lg text-gray-600 font-medium">
+              <p className="text-base md:text-lg text-gray-600 font-medium">
                 Gestiona la información de tu comercio
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex justify-center lg:justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 leftIcon={<RefreshCw size={16} />}
                 onClick={() => window.location.reload()}
+                className="w-full sm:w-auto"
               >
                 Actualizar
               </Button>
@@ -131,7 +132,7 @@ const ComercioPerfilContent: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex flex-col sm:flex-row gap-2 mb-4 md:mb-6">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -141,21 +142,21 @@ const ComercioPerfilContent: React.FC = () => {
                   window.history.pushState({}, '', url.toString());
                   window.location.reload();
                 }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                className={`flex items-center justify-center sm:justify-start space-x-2 px-4 py-3 rounded-xl font-medium transition-all duration-200 text-sm md:text-base ${
                   activeTab === tab.id
                     ? 'bg-blue-500 text-white shadow-lg'
                     : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
                 }`}
               >
-                <tab.icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <tab.icon className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{tab.label}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
           {activeTab === 'datos' && <ProfileForm />}
 
           {activeTab === 'qr' && <QRSection />}
@@ -178,13 +179,13 @@ export default function ComercioPerfilPage() {
           />
         )}
       >
-        <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
-              <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <div className="w-16 md:w-20 h-16 md:h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl md:rounded-3xl flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-lg">
                 <RefreshCw size={32} className="text-white animate-spin" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Cargando perfil...</h3>
+              <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 md:mb-3">Cargando perfil...</h3>
               <p className="text-gray-500">Preparando información del comercio</p>
             </div>
           </div>

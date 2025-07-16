@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, reload } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { authService, AuthResponse } from '@/services/auth.service';
@@ -29,6 +29,7 @@ interface AuthContextType {
   clearError: () => void;
   refreshUser: () => Promise<void>;
   isEmailVerified: boolean;
+  checkEmailVerification: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +46,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const router = useRouter();
 
+  // Function to check email verification status
+  const checkEmailVerification = async (): Promise<boolean> => {
+    if (!firebaseUser) return false;
+    
+    try {
+      // Reload the user to get the latest verification status
+      await reload(firebaseUser);
+      const verified = firebaseUser.emailVerified;
+      setIsEmailVerified(verified);
+      return verified;
+    } catch (error) {
+      console.error('🔐 Error checking email verification:', error);
+      return false;
+    }
+  };
+
   // Initialize auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -55,19 +72,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (firebaseUser) {
           console.log('🔐 Firebase user detected:', firebaseUser.email);
           
+          // Always reload user to get latest verification status
+          await reload(firebaseUser);
+          
           // Check email verification
-          setIsEmailVerified(firebaseUser.emailVerified);
+          const emailVerified = firebaseUser.emailVerified;
+          setIsEmailVerified(emailVerified);
 
-          if (firebaseUser.emailVerified) {
+          if (emailVerified) {
             // Get user data from Firestore
             const userData = await authService.getUserData(firebaseUser.uid);
             
             if (userData) {
               // Complete email verification if user was pending
               if (userData.estado === 'pendiente') {
+                console.log('🔐 Completing email verification for user...');
                 const verificationResult = await authService.completeEmailVerification(firebaseUser);
                 if (verificationResult.success && verificationResult.user) {
                   setUser(verificationResult.user);
+                  console.log('🔐 Email verification completed successfully');
                 } else {
                   setUser(userData);
                 }
@@ -99,21 +122,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return unsubscribe;
   }, []);
 
-  // Sign in function
+  // Sign in function with improved email verification handling
   const signIn = async (email: string, password: string, rememberMe = false): Promise<AuthResponse> => {
     try {
       setLoading(true);
       setError(null);
 
+      console.log('🔐 Login attempt for:', email);
+
       const response = await authService.signIn({ email, password, rememberMe });
       
       if (!response.success) {
-        setError(response.error || 'Error al iniciar sesión');
-        
         if (response.requiresEmailVerification) {
-          // Don't show error toast for email verification requirement
-          return response;
+          // Check if email was recently verified
+          if (firebaseUser) {
+            console.log('🔐 Checking if email was recently verified...');
+            const isNowVerified = await checkEmailVerification();
+            
+            if (isNowVerified) {
+              console.log('🔐 Email is now verified, retrying login...');
+              // Retry login since email is now verified
+              const retryResponse = await authService.signIn({ email, password, rememberMe });
+              if (retryResponse.success) {
+                return retryResponse;
+              }
+            }
+          }
         }
+        
+        setError(response.error || 'Error al iniciar sesión');
+        return response;
       }
 
       return response;
@@ -246,6 +284,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const refreshUser = async (): Promise<void> => {
     try {
       if (firebaseUser && user) {
+        // Reload Firebase user first
+        await reload(firebaseUser);
+        setIsEmailVerified(firebaseUser.emailVerified);
+        
+        // Then get updated user data
         const userData = await authService.getUserData(firebaseUser.uid);
         if (userData) {
           setUser(userData);
@@ -275,6 +318,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearError,
     refreshUser,
     isEmailVerified,
+    checkEmailVerification,
   };
 
   return React.createElement(
@@ -323,11 +367,12 @@ export function useRequireRole(allowedRoles: string[], redirectTo = '/') {
 
 // Hook for email verification check with password support
 export function useEmailVerification() {
-  const { firebaseUser, isEmailVerified, resendEmailVerification } = useAuth();
+  const { firebaseUser, isEmailVerified, resendEmailVerification, checkEmailVerification } = useAuth();
   
   return {
     isEmailVerified,
     email: firebaseUser?.email || '',
+    checkVerification: checkEmailVerification,
     resendVerification: (password?: string) => {
       if (firebaseUser?.email) {
         return resendEmailVerification(firebaseUser.email, password);
