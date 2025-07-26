@@ -13,8 +13,9 @@ import {
   Bell,
   HelpCircle,
   Star,
-  Zap,
-  Menu
+  Menu,
+  Sparkles,
+  Building2
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocioProfile } from '@/hooks/useSocioProfile';
@@ -34,7 +35,6 @@ interface SocioSidebarProps {
 interface RealtimeStats {
   totalBeneficios: number;
   beneficiosUsados: number;
-  ahorroTotal: number;
   estadoMembresia: string;
   actividadReciente: number;
   beneficiosEstesMes: number;
@@ -63,11 +63,10 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
   const { socio, estadisticas, loading: socioLoading } = useSocioProfile();
   const { beneficiosActivos, estadisticasRapidas } = useBeneficiosSocio();
   
-  // Optimized state management
+  // Optimized state management without savings
   const [realtimeStats, setRealtimeStats] = useState<RealtimeStats>({
     totalBeneficios: 0,
     beneficiosUsados: 0,
-    ahorroTotal: 0,
     estadoMembresia: 'pendiente',
     actividadReciente: 0,
     beneficiosEstesMes: 0
@@ -98,6 +97,13 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
       description: 'Ofertas disponibles'
     },
     {
+      id: 'asociaciones',
+      label: 'Asociaciones',
+      icon: Building2,
+      route: '/dashboard/socio/asociaciones',
+      description: 'Organizaciones disponibles'
+    },
+    {
       id: 'validar',
       label: 'Validar QR',
       icon: QrCode,
@@ -115,20 +121,17 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
     }
   ], [realtimeStats.totalBeneficios, realtimeStats.beneficiosUsados]);
 
-  // Optimized stats calculation
+  // Optimized stats calculation without savings
   const memoizedStats = useMemo(() => ({
     totalBeneficios: beneficiosActivos?.length || 0,
     beneficiosUsados: estadisticas?.totalValidaciones || estadisticasRapidas?.usados || 0,
-    ahorroTotal: estadisticas?.ahorroTotal || estadisticasRapidas?.ahorroTotal || 0,
     estadoMembresia: socio?.estadoMembresia || 'pendiente',
     actividadReciente: estadisticas?.totalValidaciones || 0,
     beneficiosEstesMes: estadisticasRapidas?.ahorroEsteMes || 0
   }), [
     beneficiosActivos?.length,
     estadisticas?.totalValidaciones,
-    estadisticas?.ahorroTotal,
     estadisticasRapidas?.usados,
-    estadisticasRapidas?.ahorroTotal,
     estadisticasRapidas?.ahorroEsteMes,
     socio?.estadoMembresia
   ]);
@@ -151,7 +154,6 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
     const unsubscribe = onSnapshot(validacionesQuery, (snapshot) => {
       const validaciones = snapshot.docs.map(doc => doc.data());
       const totalValidaciones = validaciones.length;
-      const ahorroCalculado = validaciones.reduce((total, v) => total + (v.montoDescuento || 0), 0);
       
       // Get current month validations
       const currentMonth = new Date().getMonth();
@@ -164,7 +166,6 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
       setRealtimeStats(prev => ({
         ...prev,
         beneficiosUsados: totalValidaciones,
-        ahorroTotal: ahorroCalculado,
         actividadReciente: totalValidaciones,
         beneficiosEstesMes
       }));
@@ -188,20 +189,20 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
     return pathname === item.route || activeSection === item.id;
   }, [pathname, activeSection]);
 
-  // Loading skeleton
+  // Modern loading skeleton
   if (socioLoading) {
     return (
       <div className={`
-        fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-lg z-40 transition-all duration-300
+        fixed left-0 top-0 h-full bg-white/95 backdrop-blur-md border-r border-gray-200/50 shadow-2xl z-40 transition-all duration-300
         ${open ? 'w-80' : 'w-0 lg:w-20'}
         lg:relative lg:translate-x-0
       `}>
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-4">
           <div className="animate-pulse">
-            <div className="h-10 bg-gray-200 rounded-lg mb-3"></div>
-            <div className="space-y-2">
+            <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded-2xl mb-4"></div>
+            <div className="space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="h-8 bg-gray-200 rounded-lg"></div>
+                <div key={i} className="h-10 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl"></div>
               ))}
             </div>
           </div>
@@ -212,59 +213,63 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Modern mobile backdrop */}
       {open && (
         <div 
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden transition-all duration-300"
           onClick={onToggle}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Modern Sidebar */}
       <div className={`
-        fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-lg z-40 transition-all duration-300
+        fixed left-0 top-0 h-full bg-white/95 backdrop-blur-md border-r border-gray-200/50 shadow-2xl z-40 transition-all duration-300
         ${open ? 'w-80' : 'w-0 lg:w-20'}
         lg:relative lg:translate-x-0 flex flex-col
       `}>
-        {/* Compact Header */}
-        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
+        {/* Modern Header */}
+        <div className="px-4 py-4 border-b border-gray-100/50 flex-shrink-0">
           <div className="flex items-center space-x-3">
             <div className="relative">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-                <User className="w-5 h-5 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <User className="w-6 h-6 text-white" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full border-2 border-white shadow-lg">
+                <div className="w-full h-full bg-emerald-500 rounded-full animate-pulse"></div>
+              </div>
             </div>
             
             {open && (
               <div className="flex-1 min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 truncate">
+                <h2 className="text-lg font-black text-gray-900 truncate">
                   {socio?.nombre || user?.nombre || 'Socio'}
                 </h2>
+                <p className="text-sm text-gray-500 font-medium">
+                  #{socio?.numeroSocio || 'N/A'}
+                </p>
               </div>
             )}
             
             {/* Mobile toggle button */}
             <button
               onClick={onToggle}
-              className="lg:hidden p-1 rounded-md hover:bg-gray-100 transition-colors"
+              className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors duration-200"
             >
-              <Menu className="w-4 h-4 text-gray-500" />
+              <Menu className="w-5 h-5 text-gray-500" />
             </button>
           </div>
         </div>
 
-        {/* Compact Stats */}
+        {/* Modern Stats */}
         <SocioSidebarStats
           totalBeneficios={realtimeStats.totalBeneficios}
-          ahorroTotal={realtimeStats.ahorroTotal}
           beneficiosUsados={realtimeStats.beneficiosUsados}
           beneficiosEstesMes={realtimeStats.beneficiosEstesMes}
           isOpen={open}
         />
 
-        {/* Compact Navigation */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto min-h-0">
+        {/* Modern Navigation */}
+        <nav className="flex-1 px-3 py-3 space-y-2 overflow-y-auto min-h-0">
           {menuItems.map((item) => {
             const isActive = isActiveItem(item);
             
@@ -273,45 +278,50 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
                 key={item.id}
                 onClick={() => handleNavigation(item.route, item.id)}
                 className={`
-                  w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200
+                  group w-full flex items-center space-x-3 px-3 py-3 rounded-2xl text-left transition-all duration-300
                   ${isActive 
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm' 
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-200/50 shadow-lg transform scale-[1.02]' 
+                    : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900 hover:shadow-md hover:scale-[1.01]'
                   }
                   ${!open && 'lg:justify-center lg:px-2'}
                 `}
               >
                 <div className={`
-                  flex items-center justify-center w-7 h-7 rounded-md transition-colors
-                  ${isActive ? 'bg-blue-100 text-blue-600' : 'text-gray-500'}
+                  flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-300
+                  ${isActive 
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' 
+                    : 'text-gray-500 group-hover:bg-gradient-to-r group-hover:from-blue-100 group-hover:to-purple-100 group-hover:text-blue-600'
+                  }
                 `}>
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className="w-5 h-5" />
                 </div>
                 
                 {open && (
                   <>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium truncate text-sm">{item.label}</span>
+                        <span className="font-bold truncate">{item.label}</span>
                         {item.isNew && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <Zap className="w-2.5 h-2.5 mr-0.5" />
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200">
+                            <Sparkles className="w-3 h-3 mr-1" />
                             Nuevo
                           </span>
                         )}
                       </div>
                       {item.description && (
-                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                        <p className="text-xs text-gray-500 truncate font-medium">{item.description}</p>
                       )}
                     </div>
                     
                     <div className="flex items-center space-x-2">
                       {item.badge !== undefined && item.badge > 0 && (
-                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full min-w-[18px]">
+                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-black text-white bg-gradient-to-r from-blue-500 to-purple-500 rounded-full min-w-[20px] shadow-lg">
                           {item.badge > 99 ? '99+' : item.badge}
                         </span>
                       )}
-                      <ChevronRight className={`w-3 h-3 transition-transform ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <ChevronRight className={`w-4 h-4 transition-all duration-300 ${
+                        isActive ? 'text-blue-600 transform rotate-90' : 'text-gray-400 group-hover:text-blue-500'
+                      }`} />
                     </div>
                   </>
                 )}
@@ -320,59 +330,62 @@ const SocioSidebar: React.FC<SocioSidebarProps> = ({
           })}
         </nav>
 
-        {/* Compact Quick Actions */}
+        {/* Modern Quick Actions */}
         {open && (
-          <div className="px-3 py-2 border-t border-gray-100 flex-shrink-0">
-            <div className="flex space-x-2">
-              <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+          <div className="px-3 py-3 border-t border-gray-100/50 flex-shrink-0">
+            <div className="grid grid-cols-2 gap-2">
+              <button className="flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 rounded-xl transition-all duration-300 hover:shadow-md">
                 <Bell className="w-4 h-4" />
-                <span className="text-sm">Notificaciones</span>
+                <span className="text-sm font-medium">Alertas</span>
               </button>
               
-              <button className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+              <button className="flex items-center justify-center space-x-2 px-3 py-2 text-gray-600 hover:text-purple-600 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 rounded-xl transition-all duration-300 hover:shadow-md">
                 <HelpCircle className="w-4 h-4" />
-                <span className="text-sm">Ayuda</span>
+                <span className="text-sm font-medium">Ayuda</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Compact User Section */}
-        <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0">
+        {/* Modern User Section */}
+        <div className="px-3 py-4 border-t border-gray-100/50 flex-shrink-0">
           {open ? (
-            <div className="space-y-2">
-              <div className="flex items-center space-x-3 p-2.5 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-md flex items-center justify-center">
-                  <span className="text-white font-semibold text-sm">
+            <div className="space-y-3">
+              <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl border border-gray-200/50">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-black text-sm">
                     {(socio?.nombre || user?.nombre)?.charAt(0).toUpperCase() || 'S'}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-bold text-gray-900 truncate">
                     {socio?.nombre || user?.nombre || 'Socio'}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    #{socio?.numeroSocio || 'N/A'}
+                  <p className="text-xs text-gray-500 truncate font-medium">
+                    Socio #{socio?.numeroSocio || 'N/A'}
                   </p>
                 </div>
-                <Star className="w-3 h-3 text-amber-400" />
+                <div className="flex items-center space-x-1">
+                  <Star className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-600">VIP</span>
+                </div>
               </div>
               
               <button
                 onClick={onLogoutClick}
-                className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3 text-red-600 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 rounded-2xl transition-all duration-300 border border-red-200/50 hover:border-red-300 hover:shadow-lg font-bold"
               >
-                <LogOut className="w-4 h-4" />
-                <span className="font-medium text-sm">Cerrar Sesión</span>
+                <LogOut className="w-5 h-5" />
+                <span>Cerrar Sesión</span>
               </button>
             </div>
           ) : (
             <button
               onClick={onLogoutClick}
-              className="w-full flex items-center justify-center p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="w-full flex items-center justify-center p-3 text-red-600 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 rounded-2xl transition-all duration-300 hover:shadow-lg"
               title="Cerrar Sesión"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-5 h-5" />
             </button>
           )}
         </div>

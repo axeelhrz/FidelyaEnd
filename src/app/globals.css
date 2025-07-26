@@ -316,6 +316,11 @@
     animation: rotateIn 0.8s ease-out forwards;
   }
   
+  /* Animación shimmer mejorada */
+  .animate-shimmer {
+    animation: shimmer 2s infinite linear;
+  }
+  
   /* Utilidades de espaciado */
   .safe-top {
     padding-top: env(safe-area-inset-top);
@@ -489,6 +494,7 @@
   }
 }
 
+/* Animación shimmer mejorada */
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);

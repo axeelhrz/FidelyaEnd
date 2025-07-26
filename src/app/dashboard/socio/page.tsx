@@ -68,12 +68,13 @@ export default function SocioDashboard() {
     setLogoutModalOpen(false);
   };
 
-  // Navigation handlers
+  // Navigation handlers - Updated to include asociaciones route
   const handleNavigate = (section: string) => {
     const sectionRoutes: Record<string, string> = {
       'dashboard': '/dashboard/socio',
       'perfil': '/dashboard/socio/perfil',
       'beneficios': '/dashboard/socio/beneficios',
+      'asociaciones': '/dashboard/socio/asociaciones',
       'validar': '/dashboard/socio/validar',
       'historial': '/dashboard/socio/historial'
     };
@@ -90,18 +91,26 @@ export default function SocioDashboard() {
     router.push('/dashboard/socio/validar');
   };
 
-  // Loading state
+  // Loading state with modern design
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-500 rounded-full animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="text-center max-w-md mx-auto">
+          <div className="relative mb-8">
+            <div className="w-20 h-20 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto" />
+            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-r-indigo-300 rounded-full animate-pulse mx-auto" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">
             Cargando Dashboard
           </h2>
-          <p className="text-slate-600">
+          <p className="text-slate-600 text-lg">
             Preparando tu panel de beneficios...
           </p>
+          <div className="mt-6 flex justify-center space-x-1">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
         </div>
       </div>
     );
@@ -121,12 +130,14 @@ export default function SocioDashboard() {
       >
         <motion.div
           key={activeSection}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="min-h-screen"
         >
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-            <div className="p-6">
+          {/* Modern gradient background */}
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/20">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-7xl">
               <SocioOverviewDashboard
                 onNavigate={handleNavigate}
                 onQuickScan={handleQuickScan}
@@ -136,7 +147,7 @@ export default function SocioDashboard() {
         </motion.div>
       </DashboardLayout>
 
-      {/* Logout Modal */}
+      {/* Modern Logout Modal */}
       <LogoutModal
         isOpen={logoutModalOpen}
         isLoading={loggingOut}

@@ -1,22 +1,28 @@
 import { z } from 'zod';
 
-export const socioSchema = z.object({
+const socioBaseSchema = z.object({
   nombre: z.string().min(2, 'Nombre debe tener al menos 2 caracteres'),
   email: z.string().email('Email inválido'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  confirmPassword: z.string().min(6, 'Confirma la contraseña'),
   estado: z.enum(['activo', 'inactivo', 'suspendido', 'pendiente', 'vencido'], {
     required_error: 'Estado es requerido',
   }),
   dni: z.string().optional(),
   telefono: z.string().optional(),
   fechaNacimiento: z.date().optional(),
-  montoCuota: z.number().min(0, 'La cuota debe ser mayor o igual a 0').optional(),
   numeroSocio: z.string().optional(),
   fechaVencimiento: z.date().optional(),
 });
 
-export const socioUpdateSchema = socioSchema.partial().extend({
-  id: z.string().min(1, 'ID es requerido'),
+export const socioSchema = socioBaseSchema.refine((data) => data.password === data.confirmPassword, {
+  message: "Las contraseñas no coinciden",
+  path: ["confirmPassword"],
 });
+
+export const socioUpdateSchema = socioBaseSchema.partial().extend({
+  id: z.string().min(1, 'ID es requerido'),
+}).omit({ password: true, confirmPassword: true });
 
 export const socioFilterSchema = z.object({
   estado: z.enum(['activo', 'inactivo', 'suspendido', 'pendiente', 'vencido']).optional(),

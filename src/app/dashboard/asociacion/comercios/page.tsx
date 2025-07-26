@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { AsociacionSidebar } from '@/components/layout/AsociacionSidebar';
 import { LogoutModal } from '@/components/ui/LogoutModal';
 import { ComercioManagement } from '@/components/asociacion/ComercioManagement';
 import { useAuth } from '@/hooks/useAuth';
-import { Store } from 'lucide-react';
+import { Store, Sparkles, TrendingUp} from 'lucide-react';
 
 // Enhanced Sidebar with logout functionality
 const AsociacionSidebarWithLogout: React.FC<{
@@ -30,24 +30,32 @@ const AsociacionSidebarWithLogout: React.FC<{
   );
 };
 
-// Loading component for Suspense fallback
+// Modern loading component
 const PageLoading = () => (
-  <div className="asociacion-page-container flex items-center justify-center">
+  <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50 flex items-center justify-center">
     <motion.div 
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
+      className="text-center"
     >
-      <div className="text-center">
-        <div className="relative mb-4">
-          <div className="w-16 h-16 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mx-auto" />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Cargando Gestión de Comercios
+      <div className="relative mb-8">
+        <div className="w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
+        <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-400 rounded-full animate-spin mx-auto" 
+             style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+      </div>
+      <div className="space-y-3">
+        <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          Cargando Comercios
         </h2>
-        <p className="text-gray-600">
-          Preparando el panel de administración...
+        <p className="text-slate-600 text-base md:text-lg">
+          Preparando tu panel de gestión...
         </p>
+        <div className="flex justify-center space-x-1 mt-4">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
       </div>
     </motion.div>
   </div>
@@ -56,16 +64,12 @@ const PageLoading = () => (
 // Main component that uses useSearchParams
 function AsociacionComerciosContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, signOut } = useAuth();
   
   // State management
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-
-  // Get filter from URL parameters
-  const filter = searchParams.get('filter');
 
   // Trigger visibility for staggered animations
   useEffect(() => {
@@ -123,26 +127,6 @@ function AsociacionComerciosContent() {
     }
   };
 
-  // Get page title based on filter
-  const getPageTitle = () => {
-    switch (filter) {
-      case 'solicitudes':
-        return 'Solicitudes Pendientes';
-      default:
-        return 'Gestión de Comercios';
-    }
-  };
-
-  // Get page description based on filter
-  const getPageDescription = () => {
-    switch (filter) {
-      case 'solicitudes':
-        return 'Revisa y gestiona las solicitudes de vinculación pendientes';
-      default:
-        return 'Administra tu red de comercios afiliados';
-    }
-  };
-
   // Loading state
   if (authLoading) {
     return <PageLoading />;
@@ -160,48 +144,67 @@ function AsociacionComerciosContent() {
           />
         )}
       >
-        <div className="asociacion-page-container">
-          <div className="p-8 space-y-12">
-            {/* Enhanced Header */}
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
+            {/* Modern Header */}
             <motion.div
-              initial={{ opacity: 0, y: -30 }}
-              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : -30 }}
-              transition={{ duration: 0.8, delay: 0.1 }}
-              className="text-center mb-12"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : -20 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="relative"
             >
-              <div className="flex items-center justify-center space-x-4 mb-6">
-                {/* Enhanced logo icon */}
-                <div className="relative group">
-                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 via-green-500 to-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl transform rotate-12 group-hover:rotate-0 transition-all duration-700 hover:scale-110">
-                    <Store className="w-10 h-10 text-white transition-transform duration-500 group-hover:scale-110" />
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-blue-600/5 rounded-2xl lg:rounded-3xl blur-3xl" />
+              
+              <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl lg:rounded-3xl border border-white/20 shadow-xl p-4 sm:p-6 lg:p-8">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                  <div className="flex items-center space-x-3 sm:space-x-6">
+                    {/* Enhanced icon */}
+                    <div className="relative group">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-500 via-purple-500 to-blue-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 group-hover:rotate-0 transition-all duration-500">
+                        <Store className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                      </div>
+                      <div className="absolute -inset-1 bg-gradient-to-br from-blue-500/30 to-purple-500/30 rounded-xl sm:rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    </div>
+                    
+                    <div>
+                      <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold bg-gradient-to-r from-slate-800 via-blue-700 to-purple-700 bg-clip-text text-transparent leading-tight">
+                        Gestión de Comercios
+                      </h1>
+                      <p className="text-sm sm:text-base lg:text-lg text-slate-600 mt-1 sm:mt-2 font-medium">
+                        Administra tu red de comercios afiliados y sus beneficios
+                      </p>
+                    </div>
                   </div>
-                  <div className="absolute -inset-2 bg-gradient-to-br from-emerald-500/30 to-green-500/30 rounded-3xl blur-lg animate-pulse-glow"></div>
-                </div>
-                
-                <div className="text-left">
-                  <h1 className="text-5xl md:text-6xl font-bold gradient-text font-playfair tracking-tight leading-none py-2">
-                    {getPageTitle()}
-                  </h1>
-                  <p className="text-xl text-slate-600 font-jakarta mt-2">
-                    {getPageDescription()}
-                  </p>
+
+                  {/* Quick stats */}
+                  <div className="flex items-center space-x-2 sm:space-x-4">
+                    <div className="flex items-center space-x-2 bg-blue-50 px-3 py-2 rounded-lg sm:rounded-xl">
+                      <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                      <span className="text-xs sm:text-sm font-semibold text-blue-700">Activo</span>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-purple-50 px-3 py-2 rounded-lg sm:rounded-xl">
+                      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+                      <span className="text-xs sm:text-sm font-semibold text-purple-700">Optimizado</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
 
             {/* Main Content */}
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 30 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <ComercioManagement onNavigate={handleNavigate} initialFilter={filter} />
+              <ComercioManagement onNavigate={handleNavigate} />
             </motion.div>
           </div>
         </div>
       </DashboardLayout>
 
-      {/* Enhanced Modal de Logout */}
+      {/* Enhanced Logout Modal */}
       <LogoutModal
         isOpen={logoutModalOpen}
         isLoading={loggingOut}
@@ -214,19 +217,21 @@ function AsociacionComerciosContent() {
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: isVisible ? 1 : 0, scale: isVisible ? 1 : 0 }}
         transition={{ duration: 0.6, delay: 1 }}
-        className="fixed bottom-8 right-8 z-50"
+        className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-50"
       >
         <button 
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="bg-gradient-to-r from-emerald-500 to-green-500 text-white p-4 rounded-full shadow-2xl hover:shadow-emerald-500/40 transform hover:-translate-y-2 hover:scale-110 transition-all duration-500 group relative overflow-hidden"
+          className="group relative bg-gradient-to-r from-blue-500 to-purple-500 text-white p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-2xl hover:shadow-blue-500/25 transform hover:-translate-y-2 hover:scale-110 transition-all duration-500 overflow-hidden"
         >
-          <svg className="w-6 h-6 relative z-10 group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 24 24">
             <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
           </svg>
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
+          
+          {/* Animated background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl sm:rounded-2xl" />
           
           {/* Shine effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 rounded-full" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 rounded-xl sm:rounded-2xl" />
         </button>
       </motion.div>
     </>

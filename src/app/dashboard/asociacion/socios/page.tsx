@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -11,6 +11,9 @@ import { EnhancedMemberManagement } from '@/components/asociacion/EnhancedMember
 import { useAuth } from '@/hooks/useAuth';
 import { 
   Users, 
+  Sparkles,
+  TrendingUp,
+  Shield
 } from 'lucide-react';
 
 // Enhanced Sidebar with logout functionality
@@ -31,6 +34,41 @@ const AsociacionSidebarWithLogout: React.FC<{
     />
   );
 };
+
+// Modern loading component
+function ModernLoadingState() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="text-center"
+      >
+        <div className="relative mb-8">
+          <div className="w-20 h-20 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mx-auto" />
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 w-20 h-20 border-4 border-transparent border-r-indigo-400 rounded-full mx-auto"
+          />
+        </div>
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+        >
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-3">
+            Cargando Gestión de Socios
+          </h2>
+          <p className="text-slate-600 text-lg">
+            Preparando tu panel de administración...
+          </p>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
 
 // Component that uses useSearchParams - needs to be wrapped in Suspense
 function SociosPageContent() {
@@ -82,27 +120,18 @@ function SociosPageContent() {
     setLogoutModalOpen(false);
   };
 
-  // Navigation handlers
-
-  // Get page title based on filter
+  // Always show "Gestión de Socios" as title regardless of filter
   const getPageTitle = () => {
-    switch (filter) {
-      case 'activos':
-        return 'Socios Activos';
-      case 'vencidos':
-        return 'Socios Vencidos';
-      default:
-        return 'Gestión de Socios';
-    }
+    return 'Gestión de Socios';
   };
 
-  // Get page description based on filter
+  // Get page description based on filter for context
   const getPageDescription = () => {
     switch (filter) {
       case 'activos':
-        return 'Miembros con membresía vigente';
+        return 'Administra y supervisa tu comunidad de miembros activos';
       case 'vencidos':
-        return 'Miembros con membresía vencida que requieren atención';
+        return 'Gestiona socios con membresías vencidas';
       default:
         return 'Administra y supervisa tu comunidad de miembros';
     }
@@ -110,27 +139,7 @@ function SociosPageContent() {
 
   // Loading state
   if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50/50 via-white to-celestial-50/30 flex items-center justify-center">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="text-center">
-            <div className="relative mb-4">
-              <div className="w-16 h-16 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mx-auto" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Cargando {getPageTitle()}
-            </h2>
-            <p className="text-gray-600">
-              Preparando el panel de administración...
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <ModernLoadingState />;
   }
 
   return (
@@ -145,77 +154,122 @@ function SociosPageContent() {
           />
         )}
       >
-        <div className="asociacion-page-container">
-          <div className="p-8 space-y-8">
-            {/* Clean Header */}
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
+            {/* Modern Header with enhanced design */}
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : -20 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-center"
+              initial={{ opacity: 0, y: -30 }}
+              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : -30 }}
+              transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
+              className="relative"
             >
-              <div className="flex items-center justify-center space-x-4 mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-sky-500 to-sky-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Users className="w-8 h-8 text-white" />
-                </div>
-                
-                <div className="text-left">
-                  <h1 className="text-4xl font-bold text-slate-900">
-                    {getPageTitle()}
-                  </h1>
-                  <p className="text-lg text-slate-600 mt-1">
-                    {getPageDescription()}
-                  </p>
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5 rounded-3xl blur-3xl" />
+              
+              <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-6 sm:p-8">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                    {/* Icon with modern design */}
+                    <motion.div
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
+                      className="relative"
+                    >
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-2xl sm:rounded-3xl flex items-center justify-center shadow-2xl">
+                        <Users className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                        <motion.div
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                          className="absolute inset-0 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl sm:rounded-3xl opacity-20"
+                        />
+                      </div>
+                      {/* Floating decoration */}
+                      <motion.div
+                        animate={{ y: [-5, 5, -5] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full shadow-lg"
+                      >
+                        <Sparkles className="w-4 h-4 text-white m-1" />
+                      </motion.div>
+                    </motion.div>
+                    
+                    <div className="text-center sm:text-left">
+                      <motion.h1
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.6, delay: 0.4 }}
+                        className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-slate-800 via-blue-700 to-indigo-700 bg-clip-text text-transparent leading-tight"
+                      >
+                        {getPageTitle()}
+                      </motion.h1>
+                      <motion.p
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.6, delay: 0.5 }}
+                        className="text-lg sm:text-xl text-slate-600 mt-2 font-medium"
+                      >
+                        {getPageDescription()}
+                      </motion.p>
+                    </div>
+                  </div>
+
+                  {/* Quick stats badges */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.6, delay: 0.6 }}
+                    className="flex flex-wrap gap-3 justify-center lg:justify-end"
+                  >
+                    <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-2 rounded-full border border-emerald-200/50">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      <span className="text-sm font-semibold text-emerald-700">Crecimiento</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-full border border-blue-200/50">
+                      <Shield className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-700">Gestión Segura</span>
+                    </div>
+                  </motion.div>
                 </div>
               </div>
             </motion.div>
 
-            {/* Main Content */}
+            {/* Main Content with enhanced container */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 40 }}
+              transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
+              className="relative"
             >
-              <EnhancedMemberManagement />
+              {/* Background decoration for content */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-blue-50/20 to-indigo-50/30 rounded-3xl blur-3xl" />
+              
+              <div className="relative">
+                <EnhancedMemberManagement />
+              </div>
             </motion.div>
           </div>
         </div>
       </DashboardLayout>
 
-      {/* Logout Modal */}
-      <LogoutModal
-        isOpen={logoutModalOpen}
-        isLoading={loggingOut}
-        onConfirm={handleLogoutConfirm}
-        onCancel={handleLogoutCancel}
-      />
+      {/* Enhanced Logout Modal */}
+      <AnimatePresence>
+        {logoutModalOpen && (
+          <LogoutModal
+            isOpen={logoutModalOpen}
+            isLoading={loggingOut}
+            onConfirm={handleLogoutConfirm}
+            onCancel={handleLogoutCancel}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
 
-// Loading fallback component
+// Enhanced loading fallback component
 function SociosPageLoading() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50/50 via-white to-celestial-50/30 flex items-center justify-center">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="text-center">
-          <div className="relative mb-4">
-            <div className="w-16 h-16 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mx-auto" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Cargando Gestión de Socios
-          </h2>
-          <p className="text-gray-600">
-            Preparando el panel de administración...
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
+  return <ModernLoadingState />;
 }
 
 export default function AsociacionSociosPage() {

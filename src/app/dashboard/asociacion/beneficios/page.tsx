@@ -8,10 +8,9 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { AsociacionSidebar } from '@/components/layout/AsociacionSidebar';
 import { LogoutModal } from '@/components/ui/LogoutModal';
 import { BeneficiosManagement } from '@/components/asociacion/BeneficiosManagement';
-import { ValidacionesHistory } from '@/components/asociacion/ValidacionesHistory';
 import { CreateBeneficioModal } from '@/components/asociacion/CreateBeneficioModal';
 import { useAuth } from '@/hooks/useAuth';
-import { Gift, CheckCircle, Plus } from 'lucide-react';
+import { Gift, Plus, Sparkles } from 'lucide-react';
 
 // Enhanced Sidebar with logout functionality
 const AsociacionSidebarWithLogout: React.FC<{
@@ -40,7 +39,6 @@ export default function AsociacionBeneficiosPage() {
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState('todos');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -80,22 +78,6 @@ export default function AsociacionBeneficiosPage() {
     setLogoutModalOpen(false);
   };
 
-  // Tab configuration
-  const tabs = [
-    { 
-      id: 'todos', 
-      label: 'Todos los Beneficios', 
-      icon: Gift, 
-      description: 'Gestiona todos los beneficios de tu asociación'
-    },
-    { 
-      id: 'validaciones', 
-      label: 'Validaciones', 
-      icon: CheckCircle, 
-      description: 'Historial de validaciones de beneficios'
-    }
-  ];
-
   // Handle create beneficio
   const handleCreateBeneficio = () => {
     setCreateModalOpen(true);
@@ -109,23 +91,25 @@ export default function AsociacionBeneficiosPage() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="asociacion-page-container flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
+          className="text-center"
         >
-          <div className="text-center">
-            <div className="relative mb-4">
-              <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto" />
+          <div className="relative mb-6">
+            <div className="w-20 h-20 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Gift className="w-8 h-8 text-purple-500 animate-pulse" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Cargando Gestión de Beneficios
-            </h2>
-            <p className="text-gray-600">
-              Preparando ofertas y promociones...
-            </p>
           </div>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3">
+            Cargando Gestión de Beneficios
+          </h2>
+          <p className="text-gray-600 text-lg">
+            Preparando ofertas y promociones...
+          </p>
         </motion.div>
       </div>
     );
@@ -143,93 +127,69 @@ export default function AsociacionBeneficiosPage() {
           />
         )}
       >
-        <div className="asociacion-page-container">
-          <div className="p-8 space-y-12">
+        <div className="min-h-screen bg-gradient-to-br from-purple-50/50 via-white to-pink-50/50">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-8">
             {/* Enhanced Header */}
             <motion.div
               initial={{ opacity: 0, y: -30 }}
               animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : -30 }}
               transition={{ duration: 0.8, delay: 0.1 }}
-              className="text-center mb-12"
+              className="text-center mb-8"
             >
-              <div className="flex items-center justify-center space-x-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-8">
                 {/* Enhanced logo icon */}
                 <div className="relative group">
-                  <div className="w-20 h-20 bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl transform rotate-12 group-hover:rotate-0 transition-all duration-700 hover:scale-110">
-                    <Gift className="w-10 h-10 text-white transition-transform duration-500 group-hover:scale-110" />
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl transform rotate-12 group-hover:rotate-0 transition-all duration-700 hover:scale-110">
+                    <Gift className="w-8 h-8 sm:w-10 sm:h-10 text-white transition-transform duration-500 group-hover:scale-110" />
                   </div>
-                  <div className="absolute -inset-2 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-3xl blur-lg animate-pulse-glow"></div>
+                  <div className="absolute -inset-2 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-3xl blur-lg animate-pulse"></div>
+                  <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-bounce" />
                 </div>
                 
-                <div className="text-left">
-                  <h1 className="text-5xl md:text-6xl font-bold gradient-text font-playfair tracking-tight leading-none py-2">
+                <div className="text-center sm:text-left">
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent font-playfair tracking-tight leading-none py-2">
                     Gestión de Beneficios
                   </h1>
-                  <p className="text-xl text-slate-600 font-jakarta mt-2">
-                    Crea y administra ofertas exclusivas
+                  <p className="text-lg sm:text-xl text-slate-600 font-jakarta mt-2">
+                    Crea y administra ofertas exclusivas para tus socios
                   </p>
                 </div>
               </div>
+
+              {/* Quick Action Button */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: isVisible ? 1 : 0, scale: isVisible ? 1 : 0.9 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="flex justify-center"
+              >
+                <button
+                  onClick={handleCreateBeneficio}
+                  className="group relative overflow-hidden bg-gradient-to-r from-purple-500 to-pink-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="relative flex items-center gap-3">
+                    <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                    <span>Crear Nuevo Beneficio</span>
+                  </div>
+                  {/* Shine effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </button>
+              </motion.div>
             </motion.div>
 
-            {/* Tab Navigation */}
+            {/* Main Content */}
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 30 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-              className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 p-6"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-                <div className="flex space-x-1 bg-gray-100 rounded-xl p-1">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium text-sm transition-all duration-200 ${
-                        activeTab === tab.id
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                      }`}
-                    >
-                      <tab.icon className="w-5 h-5" />
-                      <span>{tab.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {activeTab === 'todos' && (
-                  <button
-                    onClick={handleCreateBeneficio}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-medium hover:from-purple-600 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Nuevo Beneficio
-                  </button>
-                )}
-              </div>
-
-              {/* Tab Description */}
-              <div className="mb-6">
-                <p className="text-gray-600">
-                  {tabs.find(tab => tab.id === activeTab)?.description}
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Tab Content */}
-            <motion.div
-              key={`${activeTab}-${refreshKey}`}
+              key={refreshKey}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 30 }}
               transition={{ duration: 0.8, delay: 0.5 }}
+              className="relative"
             >
-              {activeTab === 'todos' && (
-                <BeneficiosManagement onCreateBeneficio={handleCreateBeneficio} />
-              )}
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-100/20 to-pink-100/20 rounded-3xl blur-3xl -z-10"></div>
               
-              {activeTab === 'validaciones' && (
-                <ValidacionesHistory />
-              )}
+              <BeneficiosManagement onCreateBeneficio={handleCreateBeneficio} />
             </motion.div>
           </div>
         </div>
@@ -255,7 +215,7 @@ export default function AsociacionBeneficiosPage() {
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: isVisible ? 1 : 0, scale: isVisible ? 1 : 0 }}
         transition={{ duration: 0.6, delay: 1 }}
-        className="fixed bottom-8 right-8 z-50"
+        className="fixed bottom-6 right-6 z-50"
       >
         <button 
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}

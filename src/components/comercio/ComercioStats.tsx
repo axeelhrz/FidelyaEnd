@@ -67,9 +67,9 @@ export const ComercioStats: React.FC = () => {
       v.fechaHora.toDate() >= startDate
     );
 
-    const validacionesExitosas = periodValidaciones.filter(v => v.resultado === 'valido');
-    const totalIngresos = validacionesExitosas.reduce((sum, v) => sum + (v.montoTransaccion || 0), 0);
-    const totalDescuentos = validacionesExitosas.reduce((sum, v) => sum + (v.descuentoAplicado || 0), 0);
+    const validacionesExitosas = periodValidaciones.filter(v => v.resultado === 'habilitado');
+    const totalIngresos = validacionesExitosas.reduce((sum, v) => sum + (v.monto || 0), 0);
+    const totalDescuentos = validacionesExitosas.reduce((sum, v) => sum + (v.montoDescuento || v.ahorro || 0), 0);
 
     // Daily validations for chart
     const dailyValidations = [];
@@ -83,14 +83,14 @@ export const ComercioStats: React.FC = () => {
         return vDate >= dayStart && vDate <= dayEnd;
       });
 
-      const daySuccessful = dayValidations.filter(v => v.resultado === 'valido');
+      const daySuccessful = dayValidations.filter(v => v.resultado === 'habilitado');
 
       dailyValidations.push({
         date: format(date, 'dd/MM', { locale: es }),
         fullDate: format(date, 'yyyy-MM-dd'),
         validaciones: dayValidations.length,
         exitosas: daySuccessful.length,
-        ingresos: daySuccessful.reduce((sum, v) => sum + (v.montoTransaccion || 0), 0),
+        ingresos: daySuccessful.reduce((sum, v) => sum + (v.monto || 0), 0),
       });
     }
 

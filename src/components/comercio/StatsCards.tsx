@@ -34,7 +34,7 @@ export const StatsCards: React.FC = () => {
     v.fechaHora.toDate() >= startOfThisMonth
   );
 
-  const validacionesExitosas = validacionesEsteMes.filter(v => v.resultado === 'valido');
+  const validacionesExitosas = validacionesEsteMes.filter(v => v.resultado === 'habilitado');
   const tasaExito = validacionesEsteMes.length > 0 
     ? (validacionesExitosas.length / validacionesEsteMes.length) * 100 
     : 0;

@@ -8,7 +8,8 @@
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001",
       "https://127.0.0.1:3000",
-      "https://127.0.0.1:3001"
+      "https://127.0.0.1:3001",
+      "*"
     ],
     "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
     "maxAgeSeconds": 3600,
@@ -18,7 +19,9 @@
       "Access-Control-Allow-Methods",
       "Access-Control-Allow-Headers",
       "Access-Control-Max-Age",
-      "Access-Control-Allow-Credentials"
+      "Access-Control-Allow-Credentials",
+      "Authorization",
+      "X-Requested-With"
     ]
   }
 ]

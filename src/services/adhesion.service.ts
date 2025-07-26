@@ -40,7 +40,7 @@ export interface ComercioDisponible {
     instagram?: string;
     twitter?: string;
   };
-  estado: 'activo' | 'inactivo' | 'pendiente';
+  estado: 'activo' | 'inactivo' | 'pendiente' | 'suspendido';
   asociacionesVinculadas: string[];
   creadoEn: Timestamp;
   actualizadoEn?: Timestamp;

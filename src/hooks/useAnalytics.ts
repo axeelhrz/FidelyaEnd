@@ -126,7 +126,9 @@ export const useAnalytics = (dateRange: DateRange) => {
       // Calculate most used benefit
       const beneficioUsos: Record<string, number> = {};
       filteredValidaciones.forEach(v => {
-        beneficioUsos[v.beneficioId] = (beneficioUsos[v.beneficioId] || 0) + 1;
+        if (typeof v.beneficioId !== 'undefined' && v.beneficioId !== null) {
+          beneficioUsos[v.beneficioId] = (beneficioUsos[v.beneficioId] || 0) + 1;
+        }
       });
 
       const beneficioMasUsadoId = Object.entries(beneficioUsos).sort(([,a], [,b]) => b - a)[0];
@@ -136,7 +138,7 @@ export const useAnalytics = (dateRange: DateRange) => {
       } : null;
 
       // Calculate success rate - FIXED: filteredValidaciones instead of filteredValidations
-      const validacionesExitosas = filteredValidaciones.filter(v => v.resultado === 'valido').length;
+      const validacionesExitosas = filteredValidaciones.filter(v => v.resultado === 'habilitado').length;
       const tasaExito = totalValidaciones > 0 ? (validacionesExitosas / totalValidaciones) * 100 : 0;
 
       // Calculate monthly growth
@@ -171,7 +173,7 @@ export const useAnalytics = (dateRange: DateRange) => {
           return vDate >= dayStart && vDate <= dayEnd;
         });
 
-        const exitosas = dayValidaciones.filter(v => v.resultado === 'valido').length;
+        const exitosas = dayValidaciones.filter(v => v.resultado === 'habilitado').length;
         const fallidas = dayValidaciones.length - exitosas;
 
         return {

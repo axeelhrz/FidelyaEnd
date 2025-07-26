@@ -279,8 +279,22 @@ export const AsociacionDashboardSummary: React.FC<AsociacionDashboardSummaryProp
     );
   }
 
+  // Calcular porcentajes correctamente
   const activityRate = stats.total > 0 ? Math.round((stats.activos / stats.total) * 100) : 0;
   const expiredRate = stats.total > 0 ? Math.round((stats.vencidos / stats.total) * 100) : 0;
+  
+  // Calcular tendencias basadas en los porcentajes
+  const getActivityTrend = (rate: number): 'up' | 'down' | 'neutral' => {
+    if (rate >= 80) return 'up';
+    if (rate >= 60) return 'neutral';
+    return 'down';
+  };
+
+  const getExpiredTrend = (rate: number): 'up' | 'down' | 'neutral' => {
+    if (rate <= 10) return 'up'; // Pocos vencidos es bueno
+    if (rate <= 25) return 'neutral';
+    return 'down'; // Muchos vencidos es malo
+  };
 
   const cards = [
     {
@@ -297,7 +311,7 @@ export const AsociacionDashboardSummary: React.FC<AsociacionDashboardSummaryProp
       icon: <HowToReg sx={{ fontSize: 28 }} />,
       color: '#10b981',
       delay: 0.1,
-      trend: 'up' as const,
+      trend: getActivityTrend(activityRate),
       percentage: activityRate
     },
     {
@@ -306,7 +320,7 @@ export const AsociacionDashboardSummary: React.FC<AsociacionDashboardSummaryProp
       icon: <PersonOff sx={{ fontSize: 28 }} />,
       color: '#ef4444',
       delay: 0.2,
-      trend: stats.vencidos > 0 ? 'down' as const : 'neutral' as const,
+      trend: getExpiredTrend(expiredRate),
       percentage: expiredRate
     },
     {
@@ -315,7 +329,7 @@ export const AsociacionDashboardSummary: React.FC<AsociacionDashboardSummaryProp
       icon: <TrendingUp sx={{ fontSize: 28 }} />,
       color: '#6366f1',
       delay: 0.3,
-      trend: activityRate >= 80 ? 'up' as const : activityRate >= 60 ? 'neutral' as const : 'down' as const
+      trend: getActivityTrend(activityRate)
     }
   ];
 

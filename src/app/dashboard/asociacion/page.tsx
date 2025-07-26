@@ -14,10 +14,13 @@ import {
   BarChart3, 
   Plus,
   Building2,
+  Sparkles,
+  TrendingUp,
+  Gift
 } from 'lucide-react';
 
-// Simplified Quick Actions Component
-const QuickActions: React.FC<{
+// Modern Quick Actions Component with enhanced responsiveness
+const ModernQuickActions: React.FC<{
   onNavigate: (section: string) => void;
 }> = ({ onNavigate }) => {
   const quickActions = [
@@ -25,59 +28,101 @@ const QuickActions: React.FC<{
       id: 'add-member',
       label: 'Nuevo Socio',
       icon: <Plus size={20} />,
-      color: 'bg-emerald-500 hover:bg-emerald-600',
+      gradient: 'from-emerald-500 via-emerald-600 to-teal-600',
+      hoverGradient: 'hover:from-emerald-600 hover:via-emerald-700 hover:to-teal-700',
       onClick: () => onNavigate('socios'),
-      description: 'Agregar miembro'
+      description: 'Agregar miembro',
+      iconBg: 'bg-white/20'
     },
     {
       id: 'analytics',
       label: 'Analytics',
       icon: <BarChart3 size={20} />,
-      color: 'bg-violet-500 hover:bg-violet-600',
+      gradient: 'from-violet-500 via-purple-600 to-indigo-600',
+      hoverGradient: 'hover:from-violet-600 hover:via-purple-700 hover:to-indigo-700',
       onClick: () => onNavigate('analytics'),
-      description: 'Ver métricas'
+      description: 'Ver métricas',
+      iconBg: 'bg-white/20'
     },
     {
       id: 'comercios',
       label: 'Comercios',
       icon: <Store size={20} />,
-      color: 'bg-blue-500 hover:bg-blue-600',
+      gradient: 'from-blue-500 via-cyan-600 to-sky-600',
+      hoverGradient: 'hover:from-blue-600 hover:via-cyan-700 hover:to-sky-700',
       onClick: () => onNavigate('comercios'),
-      description: 'Gestionar red'
+      description: 'Gestionar red',
+      iconBg: 'bg-white/20'
+    },
+    {
+      id: 'beneficios',
+      label: 'Beneficios',
+      icon: <Gift size={20} />,
+      gradient: 'from-orange-500 via-amber-600 to-yellow-600',
+      hoverGradient: 'hover:from-orange-600 hover:via-amber-700 hover:to-yellow-700',
+      onClick: () => onNavigate('beneficios'),
+      description: 'Ofertas activas',
+      iconBg: 'bg-white/20'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-      {quickActions.map((action) => (
-        <button
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-8">
+      {quickActions.map((action, index) => (
+        <motion.button
           key={action.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          whileHover={{ 
+            scale: 1.02, 
+            y: -4,
+            transition: { duration: 0.2 }
+          }}
+          whileTap={{ scale: 0.98 }}
           onClick={action.onClick}
           className={`
-            relative p-6 rounded-2xl text-white shadow-lg transition-all duration-200
-            hover:shadow-xl hover:-translate-y-1 ${action.color}
-            group overflow-hidden
+            relative p-6 lg:p-8 rounded-2xl lg:rounded-3xl text-white shadow-lg 
+            transition-all duration-300 hover:shadow-2xl
+            bg-gradient-to-br ${action.gradient} ${action.hoverGradient}
+            group overflow-hidden border border-white/10
           `}
         >
-          {/* Simple background pattern */}
+          {/* Animated background pattern */}
           <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-8 translate-x-8" />
-            <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-6 -translate-x-6" />
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-10 translate-x-10 group-hover:scale-110 transition-transform duration-500" />
+            <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-8 -translate-x-8 group-hover:scale-110 transition-transform duration-500" />
+            <div className="absolute top-1/2 left-1/2 w-12 h-12 bg-white rounded-full -translate-x-6 -translate-y-6 group-hover:rotate-45 transition-transform duration-700" />
+          </div>
+
+          {/* Shimmer effect */}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-12 animate-shimmer" />
           </div>
 
           {/* Content */}
           <div className="relative z-10 text-center">
-            <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl mb-4 mx-auto transition-transform duration-200 group-hover:scale-110">
+            <div className={`
+              flex items-center justify-center w-14 h-14 lg:w-16 lg:h-16 
+              ${action.iconBg} rounded-2xl mb-4 mx-auto 
+              transition-all duration-300 group-hover:scale-110 group-hover:rotate-3
+              shadow-lg group-hover:shadow-xl
+            `}>
               {action.icon}
             </div>
-            <h3 className="font-semibold text-lg mb-1">
+            <h3 className="font-bold text-lg lg:text-xl mb-2 group-hover:scale-105 transition-transform duration-300">
               {action.label}
             </h3>
-            <p className="text-sm opacity-90">
+            <p className="text-sm lg:text-base opacity-90 group-hover:opacity-100 transition-opacity duration-300">
               {action.description}
             </p>
           </div>
-        </button>
+
+          {/* Floating sparkles */}
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-500">
+            <Sparkles className="w-4 h-4 text-white animate-pulse" />
+          </div>
+        </motion.button>
       ))}
     </div>
   );
@@ -90,6 +135,7 @@ const AsociacionSidebarWithLogout: React.FC<{
   onMenuClick: (section: string) => void;
   activeSection: string;
   onLogoutClick: () => void;
+  isMobile: boolean;
 }> = (props) => {
   return (
     <AsociacionSidebar
@@ -98,11 +144,12 @@ const AsociacionSidebarWithLogout: React.FC<{
       onMenuClick={props.onMenuClick}
       onLogoutClick={props.onLogoutClick}
       activeSection={props.activeSection}
+      isMobile={props.isMobile}
     />
   );
 };
 
-export default function AsociacionDashboard() {
+export default function ModernAsociacionDashboard() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
   
@@ -167,67 +214,140 @@ export default function AsociacionDashboard() {
     router.push('/dashboard/asociacion/socios');
   };
 
-  // Loading state
+  // Loading state with modern design
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-500 rounded-full animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="relative mb-8">
+            <div className="w-20 h-20 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin mx-auto" />
+            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-blue-500 rounded-full animate-spin mx-auto" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+          </div>
+          <motion.h2 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="text-2xl font-bold text-slate-900 mb-3"
+          >
             Cargando Dashboard
-          </h2>
-          <p className="text-slate-600">
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-slate-600 text-lg"
+          >
             Preparando tu panel de control...
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
       </div>
     );
   }
 
-  // Render dashboard content
-  const renderDashboardContent = () => {
+  // Render modern dashboard content
+  const renderModernDashboardContent = () => {
     return (
-      <div className="asociacion-page-container">
-        <div className="p-6 space-y-8">
-          {/* Header */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="asociacion-page-container min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 max-w-7xl mx-auto">
+          {/* Modern Header */}
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+          >
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div>
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center shadow-lg">
-                    <Building2 className="w-8 h-8 text-white" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:gap-6">
+                <div className="relative">
+                  <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-3xl flex items-center justify-center shadow-2xl">
+                    <Building2 className="w-8 h-8 lg:w-10 lg:h-10 text-white" />
                   </div>
-                  <div>
-                    <h1 className="text-3xl font-bold text-slate-900">
-                      Hola, {user?.nombre || 'Administrador'}
-                    </h1>
-                    <p className="text-lg text-slate-600 mt-1">
-                      Bienvenido a tu panel de control
-                    </p>
+                  <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full border-3 border-white shadow-lg flex items-center justify-center">
+                    <TrendingUp className="w-3 h-3 text-white" />
                   </div>
+                </div>
+                <div>
+                  <motion.h1 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2"
+                  >
+                    Hola, {user?.nombre || 'Administrador'}
+                  </motion.h1>
+                  <motion.p 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-base sm:text-lg lg:text-xl text-slate-600"
+                  >
+                    Bienvenido a tu panel de control ejecutivo
+                  </motion.p>
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex items-center space-x-2 mt-2"
+                  >
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-sm text-slate-500 font-medium">Sistema operativo</span>
+                  </motion.div>
                 </div>
               </div>
               
-              <div className="flex items-center space-x-4">
-                <button
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.4 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleAddMember}
-                  className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 flex items-center space-x-2 shadow-lg"
+                  className="bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800 hover:from-slate-700 hover:via-slate-800 hover:to-slate-900 text-white px-6 lg:px-8 py-3 lg:py-4 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-xl hover:shadow-2xl group"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                   <span>Nuevo Socio</span>
-                </button>
+                </motion.button>
+                
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleNavigate('analytics')}
+                  className="bg-white/80 backdrop-blur-sm hover:bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 px-6 lg:px-8 py-3 lg:py-4 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span className="hidden sm:inline">Analytics</span>
+                </motion.button>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Quick Actions */}
-          <QuickActions onNavigate={handleNavigate} />
+          {/* Modern Quick Actions */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <ModernQuickActions onNavigate={handleNavigate} />
+          </motion.div>
 
-          {/* Main Dashboard */}
-          <OverviewDashboard
-            onNavigate={handleNavigate}
-            onAddMember={handleAddMember}
-          />
+          {/* Main Dashboard with enhanced animations */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <OverviewDashboard
+              onNavigate={handleNavigate}
+              onAddMember={handleAddMember}
+            />
+          </motion.div>
         </div>
       </div>
     );
@@ -244,18 +364,21 @@ export default function AsociacionDashboard() {
             onLogoutClick={handleLogoutClick}
           />
         )}
+        enableTransitions={true}
       >
         <motion.div
           key={activeSection}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="min-h-full"
         >
-          {renderDashboardContent()}
+          {renderModernDashboardContent()}
         </motion.div>
       </DashboardLayout>
 
-      {/* Logout Modal */}
+      {/* Enhanced Logout Modal */}
       <LogoutModal
         isOpen={logoutModalOpen}
         isLoading={loggingOut}

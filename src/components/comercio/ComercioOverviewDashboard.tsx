@@ -12,14 +12,19 @@ import {
   BarChart3,
   Activity,
   Clock,
-  Zap,
   ArrowUpRight,
   Shield,
   Minus,
   Calendar,
   Award,
   Eye,
-  Download
+  Download,
+  Sparkles,
+  Star,
+  Target,
+  Flame,
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 import {
   collection,
@@ -37,6 +42,7 @@ import { useBeneficios } from '@/hooks/useBeneficios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ComercioOverviewDashboardProps {
   onNavigate?: (section: string) => void;
@@ -61,95 +67,148 @@ interface ComercioHealth {
   responseTime: number;
 }
 
-// Simplified KPI Card Component
+// Modern KPI Card Component with enhanced animations
 const KPICard: React.FC<{
   title: string;
   value: string | number;
   change: number;
   icon: React.ReactNode;
-  color: string;
+  gradient: string;
   subtitle?: string;
   trend?: 'up' | 'down' | 'neutral';
   onClick?: () => void;
   loading?: boolean;
   badge?: string;
+  delay?: number;
 }> = ({
   title,
   value,
   change,
   icon,
-  color,
+  gradient,
   subtitle,
   trend = 'neutral',
   onClick,
   loading = false,
-  badge
+  badge,
+  delay = 0
 }) => {
   return (
-    <div
-      className="relative bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-1"
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay, duration: 0.5, ease: "easeOut" }}
+      whileHover={{ 
+        scale: 1.02, 
+        y: -4,
+        transition: { duration: 0.2 }
+      }}
+      whileTap={{ scale: 0.98 }}
+      className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8 cursor-pointer transition-all duration-300 hover:shadow-2xl group overflow-hidden"
       onClick={onClick}
     >
+      {/* Animated background gradient */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-5 group-hover:opacity-10 transition-opacity duration-300`} />
+      
+      {/* Shimmer effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+
       {/* Badge */}
       {badge && (
-        <div className="absolute top-4 right-4">
-          <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+        <div className="absolute top-4 right-4 z-10">
+          <motion.div 
+            animate={{ rotate: [0, 5, -5, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg"
+          >
+            <Sparkles className="w-3 h-3 inline mr-1" />
             {badge}
-          </div>
+          </motion.div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div 
-          className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm ${color}`}
-        >
-          {loading ? (
-            <RefreshCw className="w-6 h-6 animate-spin" />
-          ) : (
-            icon
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <motion.div 
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            className={`w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center text-white shadow-xl bg-gradient-to-br ${gradient}`}
+          >
+            {loading ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <RefreshCw className="w-6 h-6 lg:w-7 lg:h-7" />
+              </motion.div>
+            ) : (
+              icon
+            )}
+          </motion.div>
+          
+          {/* Trend Indicator */}
+          <div className="flex items-center space-x-2">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: delay + 0.3 }}
+              className="flex items-center space-x-1"
+            >
+              {trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
+              {trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
+              {trend === 'neutral' && <Minus className="w-4 h-4 text-slate-400" />}
+              <span className={`text-sm font-bold ${
+                trend === 'up' ? 'text-emerald-500' : 
+                trend === 'down' ? 'text-red-500' : 
+                'text-slate-400'
+              }`}>
+                {change > 0 ? '+' : ''}{change}%
+              </span>
+            </motion.div>
+            <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="space-y-3">
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: delay + 0.1 }}
+            className="text-sm font-semibold text-slate-500 uppercase tracking-wider"
+          >
+            {title}
+          </motion.p>
+          <motion.p 
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: delay + 0.2 }}
+            className="text-3xl lg:text-4xl font-bold text-slate-900"
+          >
+            {loading ? (
+              <div className="animate-pulse bg-slate-200 h-8 w-20 rounded" />
+            ) : (
+              value
+            )}
+          </motion.p>
+          {subtitle && (
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: delay + 0.3 }}
+              className="text-sm text-slate-600 flex items-center"
+            >
+              <Target className="w-3 h-3 mr-1" />
+              {subtitle}
+            </motion.p>
           )}
         </div>
-        
-        {/* Trend Indicator */}
-        <div className="flex items-center space-x-1">
-          {trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
-          {trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
-          {trend === 'neutral' && <Minus className="w-4 h-4 text-slate-400" />}
-          <span className={`text-sm font-medium ${
-            trend === 'up' ? 'text-emerald-500' : 
-            trend === 'down' ? 'text-red-500' : 
-            'text-slate-400'
-          }`}>
-            {change > 0 ? '+' : ''}{change}%
-          </span>
-        </div>
       </div>
-
-      {/* Content */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
-          {title}
-        </p>
-        <p className="text-2xl font-bold text-slate-900">
-          {loading ? '...' : value}
-        </p>
-        {subtitle && (
-          <p className="text-sm text-slate-600">
-            {subtitle}
-          </p>
-        )}
-      </div>
-
-      {/* Action Arrow */}
-      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-        <ArrowUpRight className="w-4 h-4 text-slate-400" />
-      </div>
-    </div>
+    </motion.div>
   );
 };
 
-// Simplified Activity Timeline Component
+// Enhanced Activity Timeline Component
 const ActivityTimeline: React.FC<{
   activities: ActivityLog[];
   loading: boolean;
@@ -166,15 +225,15 @@ const ActivityTimeline: React.FC<{
     return icons[type] || <Activity className="w-4 h-4" />;
   };
 
-  const getActivityColor = (type: ActivityLog['type']) => {
-    const colors = {
-      validation_completed: 'bg-emerald-500',
-      benefit_used: 'bg-blue-500',
-      qr_generated: 'bg-purple-500',
-      profile_updated: 'bg-sky-500',
-      system_alert: 'bg-red-500',
+  const getActivityGradient = (type: ActivityLog['type']) => {
+    const gradients = {
+      validation_completed: 'from-emerald-500 to-teal-500',
+      benefit_used: 'from-blue-500 to-indigo-500',
+      qr_generated: 'from-purple-500 to-pink-500',
+      profile_updated: 'from-sky-500 to-cyan-500',
+      system_alert: 'from-red-500 to-orange-500',
     };
-    return colors[type] || 'bg-slate-500';
+    return gradients[type] || 'from-slate-500 to-gray-500';
   };
 
   const formatActivityTime = (timestamp: Timestamp) => {
@@ -183,232 +242,329 @@ const ActivityTimeline: React.FC<{
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.6 }}
+      className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 bg-slate-600 rounded-xl flex items-center justify-center">
-            <Activity className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-4">
+          <div className="w-14 h-14 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center shadow-xl">
+            <Activity className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Actividad Reciente</h3>
-            <p className="text-slate-600 text-sm">Últimas validaciones y acciones</p>
+            <h3 className="text-xl lg:text-2xl font-bold text-slate-900">Actividad Reciente</h3>
+            <p className="text-slate-600">Últimas validaciones y acciones</p>
           </div>
         </div>
         {onViewAll && (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onViewAll}
-            className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+            className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-300 flex items-center space-x-2 shadow-lg hover:shadow-xl"
           >
-            Ver todo
-          </button>
+            <span>Ver todo</span>
+            <ExternalLink className="w-4 h-4" />
+          </motion.button>
         )}
       </div>
 
       {/* Timeline */}
       {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin"></div>
+        <div className="flex justify-center py-12">
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-8 h-8 border-3 border-slate-200 border-t-slate-500 rounded-full"
+          />
         </div>
       ) : (
         <div className="space-y-4">
-          {activities.slice(0, 5).map((activity) => (
-            <div
-              key={activity.id}
-              className="flex items-start space-x-3 p-3 rounded-lg hover:bg-slate-50 transition-colors duration-200"
-            >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${getActivityColor(activity.type)}`}>
-                {getActivityIcon(activity.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-900 text-sm">
-                  {activity.title}
-                </p>
-                <p className="text-sm text-slate-600 mt-1">
-                  {activity.description}
-                </p>
-                <div className="flex items-center space-x-1 mt-2">
-                  <Clock className="w-3 h-3 text-slate-400" />
-                  <p className="text-xs text-slate-500">
-                    {formatActivityTime(activity.timestamp)}
+          <AnimatePresence>
+            {activities.slice(0, 5).map((activity, index) => (
+              <motion.div
+                key={activity.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.02, x: 4 }}
+                className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50/80 transition-all duration-300 group cursor-pointer"
+              >
+                <motion.div 
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br ${getActivityGradient(activity.type)}`}
+                >
+                  {getActivityIcon(activity.type)}
+                </motion.div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900 group-hover:text-slate-700 transition-colors">
+                    {activity.title}
                   </p>
+                  <p className="text-sm text-slate-600 mt-1 line-clamp-2">
+                    {activity.description}
+                  </p>
+                  <div className="flex items-center space-x-2 mt-3">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    <p className="text-xs text-slate-500 font-medium">
+                      {formatActivityTime(activity.timestamp)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+                <ChevronRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              </motion.div>
+            ))}
+          </AnimatePresence>
           
           {activities.length === 0 && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Activity className="w-8 h-8 text-slate-400" />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-12"
+            >
+              <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Activity className="w-10 h-10 text-slate-400" />
               </div>
-              <p className="text-slate-500 font-medium">No hay actividad reciente</p>
-              <p className="text-slate-400 text-sm mt-1">Las validaciones aparecerán aquí</p>
-            </div>
+              <p className="text-slate-500 font-semibold text-lg mb-2">No hay actividad reciente</p>
+              <p className="text-slate-400">Las validaciones aparecerán aquí automáticamente</p>
+            </motion.div>
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
-// Simplified Comercio Status Card
+// Enhanced Comercio Status Card
 const ComercioStatusCard: React.FC<{
   health: ComercioHealth;
   loading: boolean;
   comercio: {
     qrCode?: string;
     nombreComercio?: string;
-    // Add other properties as needed
   };
   onGenerateQR?: () => void;
 }> = ({ health, loading, comercio, onGenerateQR }) => {
-  const getStatusColor = (status: string) => {
+  const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'excellent': return 'text-emerald-600 bg-emerald-100';
-      case 'good': return 'text-blue-600 bg-blue-100';
-      case 'warning': return 'text-amber-600 bg-amber-100';
-      case 'critical': return 'text-red-600 bg-red-100';
-      default: return 'text-slate-600 bg-slate-100';
+      case 'excellent': 
+        return { 
+          color: 'text-emerald-600 bg-emerald-100 border-emerald-200', 
+          text: 'Excelente',
+          icon: <Star className="w-4 h-4" />
+        };
+      case 'good': 
+        return { 
+          color: 'text-blue-600 bg-blue-100 border-blue-200', 
+          text: 'Operativo',
+          icon: <CheckCircle className="w-4 h-4" />
+        };
+      case 'warning': 
+        return { 
+          color: 'text-amber-600 bg-amber-100 border-amber-200', 
+          text: 'Advertencia',
+          icon: <AlertCircle className="w-4 h-4" />
+        };
+      case 'critical': 
+        return { 
+          color: 'text-red-600 bg-red-100 border-red-200', 
+          text: 'Crítico',
+          icon: <AlertCircle className="w-4 h-4" />
+        };
+      default: 
+        return { 
+          color: 'text-slate-600 bg-slate-100 border-slate-200', 
+          text: 'Desconocido',
+          icon: <Minus className="w-4 h-4" />
+        };
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getQRStatusConfig = (status: string) => {
     switch (status) {
-      case 'excellent': return 'Excelente';
-      case 'good': return 'Operativo';
-      case 'warning': return 'Advertencia';
-      case 'critical': return 'Crítico';
-      default: return 'Desconocido';
+      case 'active': 
+        return { 
+          color: 'text-emerald-600 bg-emerald-100 border-emerald-200', 
+          text: 'Activo',
+          icon: <CheckCircle className="w-3 h-3" />
+        };
+      case 'expired': 
+        return { 
+          color: 'text-amber-600 bg-amber-100 border-amber-200', 
+          text: 'Expirado',
+          icon: <Clock className="w-3 h-3" />
+        };
+      case 'missing': 
+        return { 
+          color: 'text-red-600 bg-red-100 border-red-200', 
+          text: 'Faltante',
+          icon: <AlertCircle className="w-3 h-3" />
+        };
+      default: 
+        return { 
+          color: 'text-slate-600 bg-slate-100 border-slate-200', 
+          text: 'Desconocido',
+          icon: <Minus className="w-3 h-3" />
+        };
     }
   };
 
-  const getQRStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-emerald-600 bg-emerald-100';
-      case 'expired': return 'text-amber-600 bg-amber-100';
-      case 'missing': return 'text-red-600 bg-red-100';
-      default: return 'text-slate-600 bg-slate-100';
-    }
-  };
-
-  const getQRStatusText = (status: string) => {
-    switch (status) {
-      case 'active': return 'Activo';
-      case 'expired': return 'Expirado';
-      case 'missing': return 'Faltante';
-      default: return 'Desconocido';
-    }
-  };
+  const statusConfig = getStatusConfig(health.status);
+  const qrStatusConfig = getQRStatusConfig(health.qrCodeStatus);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.7 }}
+      className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 bg-slate-600 rounded-xl flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-4">
+          <div className="w-14 h-14 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center shadow-xl">
+            <Shield className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Estado del Comercio</h3>
-            <p className="text-slate-600 text-sm">Monitoreo en tiempo real</p>
+            <h3 className="text-xl lg:text-2xl font-bold text-slate-900">Estado del Comercio</h3>
+            <p className="text-slate-600">Monitoreo en tiempo real</p>
           </div>
         </div>
         
-        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(health.status)}`}>
-          {getStatusText(health.status)}
-        </div>
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.8 }}
+          className={`px-4 py-2 rounded-2xl font-semibold border flex items-center space-x-2 ${statusConfig.color}`}
+        >
+          {statusConfig.icon}
+          <span>{statusConfig.text}</span>
+        </motion.div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* QR Code Status */}
-        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.9 }}
+          className="flex items-center justify-between p-4 bg-slate-50/80 rounded-2xl border border-slate-200/50"
+        >
           <div className="flex items-center space-x-3">
             <QrCode className="w-5 h-5 text-slate-600" />
             <div>
-              <p className="text-slate-700 font-medium text-sm">Código QR</p>
-              <p className="text-slate-500 text-xs">Estado de validación</p>
+              <p className="text-slate-700 font-semibold">Código QR</p>
+              <p className="text-slate-500 text-sm">Estado de validación</p>
             </div>
           </div>
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${getQRStatusColor(health.qrCodeStatus)}`}>
-            {getQRStatusText(health.qrCodeStatus)}
+          <div className={`px-3 py-1 rounded-xl text-sm font-semibold border flex items-center space-x-1 ${qrStatusConfig.color}`}>
+            {qrStatusConfig.icon}
+            <span>{qrStatusConfig.text}</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* QR Code Display */}
         {comercio?.qrCode ? (
-          <div className="text-center p-4 bg-slate-50 rounded-lg">
-            <Image
-              src={comercio.qrCode}
-              alt="QR Code"
-              width={120}
-              height={120}
-              className="w-30 h-30 mx-auto mb-3"
-            />
-            <div className="flex space-x-2">
-              <button
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 1 }}
+            className="text-center p-6 bg-slate-50/80 rounded-2xl border border-slate-200/50"
+          >
+            <div className="relative inline-block mb-4">
+              <Image
+                src={comercio.qrCode}
+                alt="QR Code"
+                width={140}
+                height={140}
+                className="w-35 h-35 mx-auto rounded-2xl shadow-lg"
+              />
+              <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                <CheckCircle className="w-3 h-3 text-white" />
+              </div>
+            </div>
+            <div className="flex space-x-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={onGenerateQR}
                 disabled={loading}
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                className="flex-1 px-4 py-3 border border-slate-300 rounded-2xl font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-all duration-300"
               >
                 {loading ? 'Regenerando...' : 'Regenerar'}
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   const link = document.createElement('a');
                   link.href = comercio.qrCode ?? '';
                   link.download = `qr-${comercio.nombreComercio}.png`;
                   link.click();
                 }}
-                className="flex-1 px-3 py-2 bg-slate-600 text-white rounded-lg text-sm font-medium hover:bg-slate-700"
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-2xl font-semibold hover:from-slate-700 hover:to-slate-800 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
               >
-                <Download className="w-4 h-4 inline mr-1" />
-                Descargar
-              </button>
+                <Download className="w-4 h-4" />
+                <span>Descargar</span>
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="text-center p-4 bg-slate-50 rounded-lg">
-            <QrCode className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-            <p className="text-slate-600 text-sm mb-3">No tienes código QR generado</p>
-            <button
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 1 }}
+            className="text-center p-6 bg-slate-50/80 rounded-2xl border border-slate-200/50"
+          >
+            <QrCode className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+            <p className="text-slate-600 font-semibold mb-4">No tienes código QR generado</p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onGenerateQR}
               disabled={loading}
-              className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
+              className="w-full px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-2xl font-semibold hover:from-slate-700 hover:to-slate-800 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               {loading ? 'Generando...' : 'Generar QR'}
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         )}
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="text-center p-3 bg-slate-50 rounded-lg">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Award className="w-4 h-4 text-white" />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.1 }}
+          className="grid grid-cols-2 gap-4"
+        >
+          <div className="text-center p-4 bg-blue-50/80 rounded-2xl border border-blue-200/50">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Award className="w-5 h-5 text-white" />
             </div>
-            <p className="text-blue-700 text-xs font-medium mb-1">Beneficios Activos</p>
-            <p className="text-blue-900 font-semibold text-xs">
+            <p className="text-blue-700 font-semibold mb-1">Beneficios Activos</p>
+            <p className="text-blue-900 font-bold text-xl">
               {loading ? '...' : health.benefitsActive}
             </p>
           </div>
 
-          <div className="text-center p-3 bg-slate-50 rounded-lg">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Zap className="w-4 h-4 text-white" />
+          <div className="text-center p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200/50">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Flame className="w-5 h-5 text-white" />
             </div>
-            <p className="text-emerald-700 text-xs font-medium mb-1">Validaciones Hoy</p>
-            <p className="text-emerald-900 font-semibold text-xs">
+            <p className="text-emerald-700 font-semibold mb-1">Validaciones Hoy</p>
+            <p className="text-emerald-900 font-bold text-xl">
               {loading ? '...' : health.validationsToday}
             </p>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-// Simplified Quick Stats Component
+// Enhanced Quick Stats Component
 const QuickStats: React.FC<{
   validacionesHoy: number;
   validacionesMes: number;
@@ -420,41 +576,56 @@ const QuickStats: React.FC<{
       label: 'Validaciones Hoy',
       value: validacionesHoy,
       icon: <Calendar className="w-5 h-5" />,
-      color: 'bg-blue-500'
+      gradient: 'from-blue-500 to-indigo-500',
+      change: '+12%'
     },
     {
       label: 'Validaciones del Mes',
       value: validacionesMes,
       icon: <TrendingUp className="w-5 h-5" />,
-      color: 'bg-emerald-500'
+      gradient: 'from-emerald-500 to-teal-500',
+      change: '+8%'
     },
     {
       label: 'Clientes Únicos',
       value: clientesUnicos,
       icon: <Users className="w-5 h-5" />,
-      color: 'bg-purple-500'
+      gradient: 'from-purple-500 to-pink-500',
+      change: '+15%'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      {stats.map((stat) => (
-        <div
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-8">
+      {stats.map((stat, index) => (
+        <motion.div
           key={stat.label}
-          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 transition-all duration-200 hover:shadow-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          whileHover={{ scale: 1.02, y: -2 }}
+          className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 p-6 transition-all duration-300 hover:shadow-xl group"
         >
-          <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${stat.color}`}>
+          <div className="flex items-center space-x-4">
+            <motion.div 
+              whileHover={{ scale: 1.1, rotate: 5 }}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br ${stat.gradient}`}
+            >
               {stat.icon}
-            </div>
-            <div>
-              <p className="text-sm text-slate-600 font-medium">{stat.label}</p>
-              <p className="text-lg font-bold text-slate-900">
-                {loading ? '...' : stat.value.toLocaleString()}
-              </p>
+            </motion.div>
+            <div className="flex-1">
+              <p className="text-sm text-slate-600 font-semibold mb-1">{stat.label}</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-2xl font-bold text-slate-900">
+                  {loading ? '...' : stat.value.toLocaleString()}
+                </p>
+                <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">
+                  {stat.change}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -549,66 +720,67 @@ const ComercioOverviewDashboard: React.FC<ComercioOverviewDashboardProps> = ({
       title: 'Validaciones Hoy',
       value: stats?.validacionesHoy?.toLocaleString() || '0',
       change: growthMetrics.dailyGrowth,
-      icon: <Calendar className="w-6 h-6" />,
-      color: 'bg-blue-500',
+      icon: <Calendar className="w-6 h-6 lg:w-7 lg:h-7" />,
+      gradient: 'from-blue-500 to-indigo-500',
       subtitle: 'Beneficios validados',
       trend: growthMetrics.dailyGrowth > 0 ? 'up' as const : 'neutral' as const,
       onClick: () => onNavigate?.('validaciones'),
-      loading: comercioLoading
+      loading: comercioLoading,
+      delay: 0.1
     },
     {
       title: 'Validaciones del Mes',
       value: stats?.validacionesMes?.toLocaleString() || '0',
       change: growthMetrics.monthlyGrowth,
-      icon: <TrendingUp className="w-6 h-6" />,
-      color: 'bg-emerald-500',
+      icon: <TrendingUp className="w-6 h-6 lg:w-7 lg:h-7" />,
+      gradient: 'from-emerald-500 to-teal-500',
       subtitle: 'Total mensual',
       trend: growthMetrics.monthlyGrowth > 0 ? 'up' as const : 'neutral' as const,
       onClick: () => onNavigate?.('analytics'),
-      loading: comercioLoading
+      loading: comercioLoading,
+      delay: 0.2
     },
     {
       title: 'Clientes Únicos',
       value: stats?.clientesUnicos?.toString() || '0',
       change: growthMetrics.clientGrowth,
-      icon: <Users className="w-6 h-6" />,
-      color: 'bg-purple-500',
+      icon: <Users className="w-6 h-6 lg:w-7 lg:h-7" />,
+      gradient: 'from-purple-500 to-pink-500',
       subtitle: 'Este mes',
       trend: growthMetrics.clientGrowth > 0 ? 'up' as const : 'neutral' as const,
       onClick: () => onNavigate?.('clientes'),
-      loading: comercioLoading
+      loading: comercioLoading,
+      delay: 0.3
     }
   ], [stats, growthMetrics, comercioLoading, onNavigate]);
-
-  const quickActions = [
-    {
-      title: 'Analytics',
-      description: 'Ver métricas detalladas',
-      icon: <BarChart3 className="w-5 h-5" />,
-      color: 'bg-purple-500 hover:bg-purple-600',
-      onClick: () => onNavigate?.('analytics'),
-    }
-  ];
 
   const handleGenerateQR = async () => {
     await generateQRCode();
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-8">
       {/* Header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+      >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="w-16 h-16 bg-slate-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-8 h-8 text-white" />
-              </div>
+            <div className="flex items-center space-x-4 lg:space-x-6 mb-4">
+              <motion.div 
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-slate-600 to-slate-700 rounded-3xl flex items-center justify-center shadow-2xl"
+              >
+                <BarChart3 className="w-8 h-8 lg:w-10 lg:h-10 text-white" />
+              </motion.div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">
+                <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-1">
                   Vista General
                 </h1>
-                <p className="text-lg text-slate-600 mt-1">
+                <p className="text-lg lg:text-xl text-slate-600 flex items-center">
+                  <Sparkles className="w-4 h-4 mr-2 text-purple-500" />
                   Panel de control • {format(new Date(), 'EEEE, dd MMMM yyyy', { locale: es })}
                 </p>
               </div>
@@ -616,23 +788,33 @@ const ComercioOverviewDashboard: React.FC<ComercioOverviewDashboardProps> = ({
           </div>
           
           <div className="flex items-center space-x-4">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => window.location.reload()}
-              className="w-10 h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 transition-colors duration-200"
+              className="w-12 h-12 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-2xl flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
-              <RefreshCw className="w-5 h-5" />
-            </button>
+              <motion.div
+                whileHover={{ rotate: 180 }}
+                transition={{ duration: 0.3 }}
+              >
+                <RefreshCw className="w-5 h-5" />
+              </motion.div>
+            </motion.button>
             
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => onNavigate?.('analytics')}
-              className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 flex items-center space-x-2 shadow-lg"
+              className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-300 flex items-center space-x-2 shadow-xl hover:shadow-2xl"
             >
               <Eye className="w-5 h-5" />
-              <span>Ver Analytics</span>
-            </button>
+              <span className="hidden sm:inline">Ver Analytics</span>
+              <span className="sm:hidden">Analytics</span>
+            </motion.button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Quick Stats */}
       <QuickStats
@@ -643,15 +825,15 @@ const ComercioOverviewDashboard: React.FC<ComercioOverviewDashboardProps> = ({
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
         {kpiMetrics.map((metric, index) => (
           <KPICard key={index} {...metric} />
         ))}
       </div>
 
       {/* Secondary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+        <div className="xl:col-span-2">
           <ActivityTimeline
             activities={activities}
             loading={loading}
@@ -668,71 +850,70 @@ const ComercioOverviewDashboard: React.FC<ComercioOverviewDashboardProps> = ({
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-xl font-semibold text-slate-900 mb-4">Acciones Rápidas</h3>
-        <div className="grid grid-cols-1 gap-4">
-          {quickActions.map((action, index) => (
-            <button
-              key={index}
-              onClick={action.onClick}
-              className={`p-4 rounded-xl text-white transition-all duration-200 hover:shadow-lg hover:-translate-y-1 ${action.color}`}
-            >
-              <div className="text-center">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  {action.icon}
-                </div>
-                <h4 className="font-medium mb-1">{action.title}</h4>
-                <p className="text-sm opacity-90">{action.description}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Performance Summary */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Award className="w-6 h-6 text-blue-600" />
-            </div>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+        className="bg-gradient-to-br from-blue-50/80 via-indigo-50/80 to-purple-50/80 backdrop-blur-xl rounded-3xl p-6 lg:p-8 border border-blue-200/50 shadow-xl"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex items-center space-x-4 lg:space-x-6">
+            <motion.div 
+              whileHover={{ scale: 1.1, rotate: 5 }}
+              className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-xl"
+            >
+              <Award className="w-8 h-8 text-white" />
+            </motion.div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">
                 Rendimiento del Mes
               </h3>
-              <p className="text-sm text-slate-600">
+              <p className="text-slate-600 lg:text-lg">
                 Resumen de tu actividad comercial
               </p>
             </div>
           </div>
           
-          <div className="text-right">
-            <div className="flex items-center space-x-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">
-                  {beneficiosStats?.activos || 0}
-                </p>
-                <p className="text-xs text-slate-600">Beneficios Activos</p>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
-                  {stats?.validacionesMes || 0}
-                </p>
-                <p className="text-xs text-slate-600">Validaciones</p>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">
-                  {stats?.clientesUnicos || 0}
-                </p>
-                <p className="text-xs text-slate-600">Clientes</p>
-              </div>
+          <div className="grid grid-cols-3 gap-6 lg:gap-8">
+            <div className="text-center">
+              <motion.p 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.9 }}
+                className="text-3xl lg:text-4xl font-bold text-blue-600 mb-1"
+              >
+                {beneficiosStats?.activos || 0}
+              </motion.p>
+              <p className="text-sm text-slate-600 font-semibold">Beneficios Activos</p>
+            </div>
+            
+            <div className="text-center">
+              <motion.p 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 1 }}
+                className="text-3xl lg:text-4xl font-bold text-emerald-600 mb-1"
+              >
+                {stats?.validacionesMes || 0}
+              </motion.p>
+              <p className="text-sm text-slate-600 font-semibold">Validaciones</p>
+            </div>
+            
+            <div className="text-center">
+              <motion.p 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 1.1 }}
+                className="text-3xl lg:text-4xl font-bold text-purple-600 mb-1"
+              >
+                {stats?.clientesUnicos || 0}
+              </motion.p>
+              <p className="text-sm text-slate-600 font-semibold">Clientes</p>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

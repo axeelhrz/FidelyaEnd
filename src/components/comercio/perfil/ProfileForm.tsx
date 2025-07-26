@@ -44,8 +44,8 @@ import {
 } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { useComercio } from '@/hooks/useComercio';
-// TODO: Replace 'ComercioProfileFormData' with the correct type from '@/lib/validations/comercio' if it exists.
-// If it does not exist, define it locally as shown below or import the correct one.
+import { CATEGORIAS_COMERCIO } from '@/types/comercio';
+
 type ComercioProfileFormData = {
   nombre: string;
   nombreComercio: string;
@@ -67,7 +67,6 @@ type ComercioProfileFormData = {
     twitter: string;
   };
 };
-import { CATEGORIAS_COMERCIO } from '@/types/comercio';
 
 export const ProfileForm: React.FC = () => {
   const theme = useTheme();
@@ -109,18 +108,16 @@ export const ProfileForm: React.FC = () => {
     }
   });
 
-  // Watch for changes
   const watchedFields = watch();
   
   useEffect(() => {
     setHasChanges(isDirty);
   }, [isDirty]);
 
-  // Load comercio data
   useEffect(() => {
     if (comercio) {
       const formData = {
-        nombre: comercio.nombreComercio || '', // Use nombreComercio as the responsible person name
+        nombre: comercio.nombreComercio || '',
         nombreComercio: comercio.nombreComercio || '',
         email: comercio.email || '',
         categoria: comercio.categoria || '',
@@ -129,10 +126,10 @@ export const ProfileForm: React.FC = () => {
         horario: comercio.horario || '',
         descripcion: comercio.descripcion || '',
         sitioWeb: comercio.sitioWeb || '',
-        razonSocial: comercio.nombreComercio || '', // Use nombreComercio as default for razonSocial
+        razonSocial: comercio.nombreComercio || '',
         cuit: comercio.cuit || '',
-        ubicacion: comercio.direccion || '', // Use direccion as default for ubicacion
-        emailContacto: comercio.email || '', // Use email as default for emailContacto
+        ubicacion: comercio.direccion || '',
+        emailContacto: comercio.email || '',
         visible: comercio.visible ?? true,
         redesSociales: {
           facebook: '',
@@ -173,7 +170,6 @@ export const ProfileForm: React.FC = () => {
         setHasChanges(false);
         setSaveSuccess(true);
         
-        // Hide success message after 3 seconds
         setTimeout(() => {
           setSaveSuccess(false);
         }, 3000);
@@ -216,7 +212,6 @@ export const ProfileForm: React.FC = () => {
 
   const handleEditToggle = () => {
     if (isEditing && hasChanges) {
-      // Show confirmation dialog or handle unsaved changes
       const confirmDiscard = window.confirm('Tienes cambios sin guardar. ¿Deseas descartarlos?');
       if (!confirmDiscard) return;
     }
@@ -258,7 +253,6 @@ export const ProfileForm: React.FC = () => {
           position: 'relative',
         }}
       >
-        {/* Animated background */}
         <Box
           sx={{
             position: 'absolute',
@@ -274,7 +268,6 @@ export const ProfileForm: React.FC = () => {
         />
 
         <CardContent sx={{ p: { xs: 3, sm: 4, md: 6 }, position: 'relative', zIndex: 1 }}>
-          {/* Header */}
           <Stack 
             direction={{ xs: 'column', md: 'row' }} 
             justifyContent="space-between" 
@@ -425,7 +418,6 @@ export const ProfileForm: React.FC = () => {
             </Stack>
           </Stack>
 
-          {/* Error Alert */}
           <AnimatePresence>
             {error && (
               <motion.div
@@ -447,7 +439,6 @@ export const ProfileForm: React.FC = () => {
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <Stack spacing={{ xs: 4, md: 6 }}>
-              {/* Basic Information */}
               <Box>
                 <Typography 
                   variant={isMobile ? "subtitle1" : "h6"}
@@ -617,7 +608,6 @@ export const ProfileForm: React.FC = () => {
 
               <Divider sx={{ opacity: 0.3 }} />
 
-              {/* Contact Information */}
               <Box>
                 <Typography 
                   variant={isMobile ? "subtitle1" : "h6"}
@@ -754,7 +744,6 @@ export const ProfileForm: React.FC = () => {
 
               <Divider sx={{ opacity: 0.3 }} />
 
-              {/* Description */}
               <Box>
                 <Typography 
                   variant={isMobile ? "subtitle1" : "h6"}
@@ -803,7 +792,6 @@ export const ProfileForm: React.FC = () => {
 
               <Divider sx={{ opacity: 0.3 }} />
 
-              {/* Online Presence */}
               <Box>
                 <Typography 
                   variant={isMobile ? "subtitle1" : "h6"}
@@ -855,7 +843,6 @@ export const ProfileForm: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Floating Save Changes Alert */}
       <AnimatePresence>
         {hasChanges && isEditing && (
           <motion.div
@@ -922,7 +909,6 @@ export const ProfileForm: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Loading Overlay */}
       <AnimatePresence>
         {isSubmitting && (
           <motion.div

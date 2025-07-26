@@ -132,6 +132,7 @@ export interface Socio {
     descuentoAdicional: number;
   };
   pagos?: Pago[];
+  fotoPerfil?: string; // URL de la foto de perfil
   
   // Relaciones bidireccionales con asociaciones
   asociaciones?: string[]; // IDs de asociaciones vinculadas
@@ -145,6 +146,7 @@ export interface SocioFormData {
   nombre: string;
   email: string;
   estado: 'activo' | 'inactivo' | 'suspendido' | 'pendiente' | 'vencido';
+  estadoMembresia?: 'al_dia' | 'vencido' | 'pendiente';
   telefono?: string;
   dni?: string;
   direccion?: string;
@@ -153,6 +155,7 @@ export interface SocioFormData {
   fechaVencimiento?: Date | Timestamp;
   numeroSocio?: string;
   asociacionId?: string;
+  password?: string;
 }
 
 export interface SocioStats {
@@ -250,6 +253,7 @@ export interface UpdateSocioProfileData {
   direccion?: string;
   fechaNacimiento?: Date | Timestamp | string;
   avatar?: string;
+  fotoPerfil?: string; // Added to match the Socio interface
   configuracion?: Partial<SocioConfiguration>;
 }
 

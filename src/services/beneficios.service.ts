@@ -1000,6 +1000,7 @@ export class BeneficiosService {
     filtros?: {
       comercioId?: string;
       asociacionId?: string;
+      socioId?: string;
       fechaInicio?: Date;
       fechaFin?: Date;
     }
@@ -1013,21 +1014,42 @@ export class BeneficiosService {
         return this.getCache(cacheKey) as BeneficioStats;
       }
 
-      // Consultas paralelas para mejor rendimiento
-      const [beneficiosSnapshot, usosSnapshot] = await Promise.all([
-        this.obtenerBeneficiosParaEstadisticas(filtros),
-        this.obtenerUsosParaEstadisticas(filtros)
-      ]);
+      let beneficios: Beneficio[] = [];
+      let usos: BeneficioUso[] = [];
 
-      const beneficios = beneficiosSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Beneficio[];
+      // Si es para un socio específico, obtener sus beneficios disponibles y usos
+      if (filtros?.socioId) {
+        console.log('📊 Calculando estadísticas específicas para socio:', filtros.socioId);
+        
+        // Obtener beneficios disponibles para el socio
+        if (filtros.asociacionId) {
+          beneficios = await this.obtenerBeneficiosDisponibles(
+            filtros.socioId,
+            filtros.asociacionId
+          );
+        }
+        
+        // Obtener usos del socio
+        usos = await this.obtenerHistorialUsos(filtros.socioId);
+        
+        console.log(`📊 Socio tiene ${beneficios.length} beneficios disponibles y ${usos.length} usos totales`);
+      } else {
+        // Consultas paralelas para mejor rendimiento (comportamiento original)
+        const [beneficiosSnapshot, usosSnapshot] = await Promise.all([
+          this.obtenerBeneficiosParaEstadisticas(filtros),
+          this.obtenerUsosParaEstadisticas(filtros)
+        ]);
 
-      const usos = usosSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as BeneficioUso[];
+        beneficios = beneficiosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Beneficio[];
+
+        usos = usosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as BeneficioUso[];
+      }
 
       // Calcular estadísticas
       const now = new Date();
@@ -1050,7 +1072,7 @@ export class BeneficiosService {
       };
 
       this.setCache(cacheKey, stats);
-      console.log('✅ Estadísticas calculadas');
+      console.log('✅ Estadísticas calculadas:', stats);
       
       return stats;
     } catch (error) {

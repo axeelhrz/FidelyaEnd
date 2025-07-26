@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import {
   TrendingUp,
   TrendingDown,
@@ -17,7 +18,8 @@ import {
   Zap,
   ArrowUpRight,
   Shield,
-  Minus
+  Minus,
+  Eye
 } from 'lucide-react';
 import {
   collection,
@@ -60,96 +62,171 @@ interface SystemHealth {
   responseTime: number;
 }
 
-// Simplified KPI Card Component
-const KPICard: React.FC<{
+// Modern KPI Card Component with enhanced design
+const ModernKPICard: React.FC<{
   title: string;
   value: string | number;
   change: number;
   icon: React.ReactNode;
-  color: string;
+  gradient: string;
   subtitle?: string;
   trend?: 'up' | 'down' | 'neutral';
   onClick?: () => void;
   loading?: boolean;
   badge?: string;
+  delay?: number;
 }> = ({
   title,
   value,
   change,
   icon,
-  color,
+  gradient,
   subtitle,
   trend = 'neutral',
   onClick,
   loading = false,
-  badge
+  badge,
+  delay = 0
 }) => {
   return (
-    <div
-      className="relative bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-1"
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay, duration: 0.4 }}
+      whileHover={{ 
+        scale: 1.02, 
+        y: -4,
+        transition: { duration: 0.2 }
+      }}
+      whileTap={{ scale: 0.98 }}
+      className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8 cursor-pointer transition-all duration-300 hover:shadow-2xl group overflow-hidden"
       onClick={onClick}
     >
+      {/* Animated background gradient */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500 rounded-3xl`} />
+      
+      {/* Floating particles effect */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+        <div className="absolute top-4 right-4 w-1 h-1 bg-blue-400 rounded-full animate-ping" />
+        <div className="absolute top-8 right-8 w-1 h-1 bg-purple-400 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
+        <div className="absolute bottom-8 left-8 w-1 h-1 bg-emerald-400 rounded-full animate-ping" style={{ animationDelay: '1s' }} />
+      </div>
+
       {/* Badge */}
       {badge && (
-        <div className="absolute top-4 right-4">
-          <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: delay + 0.2 }}
+          className="absolute top-4 right-4"
+        >
+          <div className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
             {badge}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div 
-          className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm ${color}`}
+      <div className="flex items-start justify-between mb-6">
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: delay + 0.1, type: "spring", stiffness: 200 }}
+          className={`
+            relative flex items-center justify-center w-14 h-14 lg:w-16 lg:h-16 rounded-2xl transition-all duration-300
+            bg-gradient-to-br ${gradient} shadow-lg group-hover:shadow-xl group-hover:scale-110
+          `}
         >
           {loading ? (
-            <RefreshCw className="w-6 h-6 animate-spin" />
+            <RefreshCw className="w-6 h-6 lg:w-7 lg:h-7 text-white animate-spin" />
           ) : (
-            icon
+            <div className="text-white group-hover:scale-110 transition-transform duration-300">
+              {icon}
+            </div>
           )}
-        </div>
+          
+          {/* Icon glow effect */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradient} rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
+        </motion.div>
         
         {/* Trend Indicator */}
-        <div className="flex items-center space-x-1">
-          {trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
-          {trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
-          {trend === 'neutral' && <Minus className="w-4 h-4 text-slate-400" />}
-          <span className={`text-sm font-medium ${
-            trend === 'up' ? 'text-emerald-500' : 
-            trend === 'down' ? 'text-red-500' : 
-            'text-slate-400'
+        <motion.div 
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: delay + 0.3 }}
+          className="flex items-center space-x-2"
+        >
+          <div className={`p-2 rounded-xl transition-all duration-300 ${
+            trend === 'up' ? 'bg-emerald-100 text-emerald-600' : 
+            trend === 'down' ? 'bg-red-100 text-red-600' : 
+            'bg-slate-100 text-slate-500'
+          }`}>
+            {trend === 'up' && <TrendingUp className="w-4 h-4" />}
+            {trend === 'down' && <TrendingDown className="w-4 h-4" />}
+            {trend === 'neutral' && <Minus className="w-4 h-4" />}
+          </div>
+          <span className={`text-sm font-bold ${
+            trend === 'up' ? 'text-emerald-600' : 
+            trend === 'down' ? 'text-red-600' : 
+            'text-slate-500'
           }`}>
             {change > 0 ? '+' : ''}{change}%
           </span>
-        </div>
+        </motion.div>
       </div>
 
       {/* Content */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
+      <div className="space-y-3">
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: delay + 0.2 }}
+          className="text-sm font-semibold text-slate-500 uppercase tracking-wider"
+        >
           {title}
-        </p>
-        <p className="text-2xl font-bold text-slate-900">
-          {loading ? '...' : value}
-        </p>
+        </motion.p>
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: delay + 0.3 }}
+          className="text-3xl lg:text-4xl font-bold text-slate-900 group-hover:text-slate-800 transition-colors duration-300"
+        >
+          {loading ? (
+            <div className="flex space-x-1">
+              <div className="w-8 h-8 bg-slate-200 rounded animate-pulse" />
+              <div className="w-12 h-8 bg-slate-200 rounded animate-pulse" />
+            </div>
+          ) : value}
+        </motion.p>
         {subtitle && (
-          <p className="text-sm text-slate-600">
+          <motion.p 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: delay + 0.4 }}
+            className="text-sm text-slate-600 group-hover:text-slate-700 transition-colors duration-300"
+          >
             {subtitle}
-          </p>
+          </motion.p>
         )}
       </div>
 
       {/* Action Arrow */}
-      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-        <ArrowUpRight className="w-4 h-4 text-slate-400" />
-      </div>
-    </div>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 0, scale: 1 }}
+        whileHover={{ opacity: 1, scale: 1.1 }}
+        className="absolute bottom-4 right-4 transition-all duration-300"
+      >
+        <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors duration-300">
+          <ArrowUpRight className="w-4 h-4 text-slate-600" />
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
-// Simplified Activity Timeline Component
-const ActivityTimeline: React.FC<{
+// Modern Activity Timeline Component
+const ModernActivityTimeline: React.FC<{
   activities: ActivityLog[];
   loading: boolean;
   onViewAll?: () => void;
@@ -166,16 +243,16 @@ const ActivityTimeline: React.FC<{
     return icons[type] || <Activity className="w-4 h-4" />;
   };
 
-  const getActivityColor = (type: ActivityLog['type']) => {
-    const colors = {
-      member_added: 'bg-emerald-500',
-      member_updated: 'bg-blue-500',
-      payment_received: 'bg-green-500',
-      backup_completed: 'bg-purple-500',
-      import_completed: 'bg-sky-500',
-      system_alert: 'bg-red-500',
+  const getActivityGradient = (type: ActivityLog['type']) => {
+    const gradients = {
+      member_added: 'from-emerald-500 to-teal-500',
+      member_updated: 'from-blue-500 to-cyan-500',
+      payment_received: 'from-green-500 to-emerald-500',
+      backup_completed: 'from-purple-500 to-violet-500',
+      import_completed: 'from-sky-500 to-blue-500',
+      system_alert: 'from-red-500 to-pink-500',
     };
-    return colors[type] || 'bg-slate-500';
+    return gradients[type] || 'from-slate-500 to-gray-500';
   };
 
   const formatActivityTime = (timestamp: Timestamp) => {
@@ -184,87 +261,107 @@ const ActivityTimeline: React.FC<{
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 bg-slate-600 rounded-xl flex items-center justify-center">
-            <Activity className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-4">
+          <div className="w-14 h-14 bg-gradient-to-br from-slate-600 to-slate-800 rounded-2xl flex items-center justify-center shadow-lg">
+            <Activity className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Actividad Reciente</h3>
-            <p className="text-slate-600 text-sm">Últimas acciones del sistema</p>
+            <h3 className="text-xl lg:text-2xl font-bold text-slate-900">Actividad Reciente</h3>
+            <p className="text-slate-600">Últimas acciones del sistema</p>
           </div>
         </div>
         {onViewAll && (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onViewAll}
-            className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+            className="bg-gradient-to-r from-slate-600 to-slate-800 hover:from-slate-700 hover:to-slate-900 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-300 flex items-center space-x-2 shadow-lg hover:shadow-xl"
           >
-            Ver todo
-          </button>
+            <Eye className="w-4 h-4" />
+            <span>Ver todo</span>
+          </motion.button>
         )}
       </div>
 
       {/* Timeline */}
       {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin"></div>
+        <div className="flex justify-center py-12">
+          <div className="relative">
+            <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
+            <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-t-blue-500 rounded-full animate-spin" style={{ animationDirection: 'reverse' }} />
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {activities.slice(0, 5).map((activity) => (
-            <div
+          {activities.slice(0, 5).map((activity, index) => (
+            <motion.div
               key={activity.id}
-              className="flex items-start space-x-3 p-3 rounded-lg hover:bg-slate-50 transition-colors duration-200"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50/80 transition-all duration-300 group"
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${getActivityColor(activity.type)}`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white bg-gradient-to-br ${getActivityGradient(activity.type)} shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300`}>
                 {getActivityIcon(activity.type)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-900 text-sm">
+                <p className="font-semibold text-slate-900 group-hover:text-slate-800 transition-colors duration-300">
                   {activity.title}
                 </p>
-                <p className="text-sm text-slate-600 mt-1">
+                <p className="text-slate-600 mt-1 group-hover:text-slate-700 transition-colors duration-300">
                   {activity.description}
                 </p>
-                <div className="flex items-center space-x-1 mt-2">
-                  <Clock className="w-3 h-3 text-slate-400" />
-                  <p className="text-xs text-slate-500">
+                <div className="flex items-center space-x-2 mt-3">
+                  <div className="p-1 bg-slate-100 rounded-lg">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
                     {formatActivityTime(activity.timestamp)}
                   </p>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
           
           {activities.length === 0 && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Activity className="w-8 h-8 text-slate-400" />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-12"
+            >
+              <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Activity className="w-10 h-10 text-slate-400" />
               </div>
-              <p className="text-slate-500 font-medium">No hay actividad reciente</p>
-              <p className="text-slate-400 text-sm mt-1">Las acciones del sistema aparecerán aquí</p>
-            </div>
+              <p className="text-slate-500 font-semibold text-lg">No hay actividad reciente</p>
+              <p className="text-slate-400 mt-2">Las acciones del sistema aparecerán aquí</p>
+            </motion.div>
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
-// Simplified System Status Card
-const SystemStatusCard: React.FC<{
+// Modern System Status Card
+const ModernSystemStatusCard: React.FC<{
   health: SystemHealth;
   loading: boolean;
 }> = ({ health, loading }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'excellent': return 'text-emerald-600 bg-emerald-100';
-      case 'good': return 'text-blue-600 bg-blue-100';
-      case 'warning': return 'text-amber-600 bg-amber-100';
-      case 'critical': return 'text-red-600 bg-red-100';
-      default: return 'text-slate-600 bg-slate-100';
+      case 'excellent': return 'text-emerald-700 bg-emerald-100 border-emerald-200';
+      case 'good': return 'text-blue-700 bg-blue-100 border-blue-200';
+      case 'warning': return 'text-amber-700 bg-amber-100 border-amber-200';
+      case 'critical': return 'text-red-700 bg-red-100 border-red-200';
+      default: return 'text-slate-700 bg-slate-100 border-slate-200';
     }
   };
 
@@ -281,97 +378,121 @@ const SystemStatusCard: React.FC<{
   const storagePercentage = (health.storageUsed / health.storageLimit) * 100;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 bg-slate-600 rounded-xl flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-4">
+          <div className="w-14 h-14 bg-gradient-to-br from-slate-600 to-slate-800 rounded-2xl flex items-center justify-center shadow-lg">
+            <Shield className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Estado del Sistema</h3>
-            <p className="text-slate-600 text-sm">Monitoreo en tiempo real</p>
+            <h3 className="text-xl lg:text-2xl font-bold text-slate-900">Estado del Sistema</h3>
+            <p className="text-slate-600">Monitoreo en tiempo real</p>
           </div>
         </div>
         
-        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(health.status)}`}>
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.4, type: "spring" }}
+          className={`px-4 py-2 rounded-2xl font-semibold border ${getStatusColor(health.status)}`}
+        >
           {getStatusText(health.status)}
-        </div>
+        </motion.div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* Uptime */}
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-slate-700 font-medium text-sm">Tiempo de actividad</span>
-            <span className="text-slate-900 font-semibold text-sm">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-slate-700 font-semibold">Tiempo de actividad</span>
+            <span className="text-slate-900 font-bold text-lg">
               {loading ? '...' : `${health.uptime}%`}
             </span>
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all duration-500 ${
-                health.uptime > 99 ? 'bg-emerald-500' : 
-                health.uptime > 95 ? 'bg-amber-500' : 
-                'bg-red-500'
+          <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: loading ? '0%' : `${health.uptime}%` }}
+              transition={{ delay: 0.5, duration: 1 }}
+              className={`h-3 rounded-full transition-all duration-500 ${
+                health.uptime > 99 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 
+                health.uptime > 95 ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 
+                'bg-gradient-to-r from-red-500 to-pink-500'
               }`}
-              style={{ width: loading ? '0%' : `${health.uptime}%` }}
             />
           </div>
         </div>
 
         {/* Storage */}
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-slate-700 font-medium text-sm">Almacenamiento</span>
-            <span className="text-slate-900 font-semibold text-sm">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-slate-700 font-semibold">Almacenamiento</span>
+            <span className="text-slate-900 font-bold text-lg">
               {loading ? '...' : `${storagePercentage.toFixed(1)}%`}
             </span>
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all duration-500 ${
-                storagePercentage > 80 ? 'bg-red-500' : 
-                storagePercentage > 60 ? 'bg-amber-500' : 
-                'bg-emerald-500'
+          <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: loading ? '0%' : `${storagePercentage}%` }}
+              transition={{ delay: 0.6, duration: 1 }}
+              className={`h-3 rounded-full transition-all duration-500 ${
+                storagePercentage > 80 ? 'bg-gradient-to-r from-red-500 to-pink-500' : 
+                storagePercentage > 60 ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 
+                'bg-gradient-to-r from-emerald-500 to-teal-500'
               }`}
-              style={{ width: loading ? '0%' : `${storagePercentage}%` }}
             />
           </div>
-          <p className="text-slate-600 text-xs mt-1">
+          <p className="text-slate-600 text-sm mt-2">
             {loading ? '...' : `${(health.storageUsed / 1024).toFixed(1)} GB de ${(health.storageLimit / 1024).toFixed(1)} GB utilizados`}
           </p>
         </div>
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="text-center p-3 bg-slate-50 rounded-lg">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Clock className="w-4 h-4 text-white" />
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.7 }}
+            className="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border border-blue-100"
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Clock className="w-5 h-5 text-white" />
             </div>
-            <p className="text-blue-700 text-xs font-medium mb-1">Último Respaldo</p>
-            <p className="text-blue-900 font-semibold text-xs">
+            <p className="text-blue-700 text-xs font-semibold mb-1">Último Respaldo</p>
+            <p className="text-blue-900 font-bold text-sm">
               {loading ? '...' : health.lastBackup ? format(health.lastBackup, 'dd/MM HH:mm') : 'Nunca'}
             </p>
-          </div>
+          </motion.div>
 
-          <div className="text-center p-3 bg-slate-50 rounded-lg">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Zap className="w-4 h-4 text-white" />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.8 }}
+            className="text-center p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100"
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Zap className="w-5 h-5 text-white" />
             </div>
-            <p className="text-emerald-700 text-xs font-medium mb-1">Respuesta</p>
-            <p className="text-emerald-900 font-semibold text-xs">
+            <p className="text-emerald-700 text-xs font-semibold mb-1">Respuesta</p>
+            <p className="text-emerald-900 font-bold text-sm">
               {loading ? '...' : `${health.responseTime}ms`}
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-// Simplified Quick Stats Component
-const QuickStats: React.FC<{
+// Modern Quick Stats Component
+const ModernQuickStats: React.FC<{
   totalSocios: number;
   activosSocios: number;
   totalComercios: number;
@@ -382,41 +503,55 @@ const QuickStats: React.FC<{
       label: 'Total Socios',
       value: totalSocios,
       icon: <Users className="w-5 h-5" />,
-      color: 'bg-blue-500'
+      gradient: 'from-blue-500 to-cyan-500',
+      bgGradient: 'from-blue-50 to-cyan-50',
+      borderColor: 'border-blue-100'
     },
     {
       label: 'Socios Activos',
       value: activosSocios,
       icon: <CheckCircle className="w-5 h-5" />,
-      color: 'bg-emerald-500'
+      gradient: 'from-emerald-500 to-teal-500',
+      bgGradient: 'from-emerald-50 to-teal-50',
+      borderColor: 'border-emerald-100'
     },
     {
       label: 'Comercios Activos',
       value: totalComercios,
       icon: <Store className="w-5 h-5" />,
-      color: 'bg-purple-500'
+      gradient: 'from-purple-500 to-violet-500',
+      bgGradient: 'from-purple-50 to-violet-50',
+      borderColor: 'border-purple-100'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      {stats.map((stat) => (
-        <div
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-8">
+      {stats.map((stat, index) => (
+        <motion.div
           key={stat.label}
-          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 transition-all duration-200 hover:shadow-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          whileHover={{ scale: 1.02, y: -2 }}
+          className={`bg-gradient-to-br ${stat.bgGradient} rounded-2xl lg:rounded-3xl shadow-lg border ${stat.borderColor} p-6 transition-all duration-300 hover:shadow-xl`}
         >
-          <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${stat.color}`}>
+          <div className="flex items-center space-x-4">
+            <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-2xl flex items-center justify-center text-white bg-gradient-to-br ${stat.gradient} shadow-lg`}>
               {stat.icon}
             </div>
             <div>
-              <p className="text-sm text-slate-600 font-medium">{stat.label}</p>
-              <p className="text-lg font-bold text-slate-900">
-                {loading ? '...' : stat.value.toLocaleString()}
+              <p className="text-sm font-semibold text-slate-600 mb-1">{stat.label}</p>
+              <p className="text-2xl lg:text-3xl font-bold text-slate-900">
+                {loading ? (
+                  <div className="w-16 h-8 bg-slate-200 rounded animate-pulse" />
+                ) : (
+                  stat.value.toLocaleString()
+                )}
               </p>
             </div>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -496,74 +631,67 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     return 'good';
   }, [systemHealth]);
 
-  const kpiMetrics = useMemo(() => [
-    {
-      title: 'Total Socios',
-      value: stats.total.toLocaleString(),
-      change: growthMetrics.growthRate,
-      icon: <Users className="w-6 h-6" />,
-      color: 'bg-blue-500',
-      subtitle: 'Miembros registrados',
-      trend: growthMetrics.growthRate > 0 ? 'up' as const : 'neutral' as const,
-      onClick: () => onNavigate('socios'),
-      loading: sociosLoading
-    },
-    {
-      title: 'Socios Activos',
-      value: stats.activos.toLocaleString(),
-      change: growthMetrics.retentionRate,
-      icon: <CheckCircle className="w-6 h-6" />,
-      color: 'bg-emerald-500',
-      subtitle: 'Estado vigente',
-      trend: growthMetrics.retentionRate > 80 ? 'up' as const : growthMetrics.retentionRate > 60 ? 'neutral' as const : 'down' as const,
-      onClick: () => onNavigate('socios'),
-      loading: sociosLoading
-    },
-    {
-      title: 'Socios Vencidos',
-      value: stats.vencidos.toString(),
-      change: stats.vencidos > 0 ? -((stats.vencidos / Math.max(stats.total, 1)) * 100) : 0,
-      icon: <AlertCircle className="w-6 h-6" />,
-      color: 'bg-red-500',
-      subtitle: 'Requieren atención',
-      trend: stats.vencidos > stats.total * 0.2 ? 'up' as const : 'down' as const,
-      onClick: () => onNavigate('socios'),
-      loading: sociosLoading
-    }
-  ], [stats, growthMetrics, sociosLoading, onNavigate]);
-
-  const quickActions = [
-    {
-      title: 'Nuevo Socio',
-      description: 'Agregar nuevo miembro',
-      icon: <UserPlus className="w-5 h-5" />,
-      color: 'bg-emerald-500 hover:bg-emerald-600',
-      onClick: onAddMember,
-    },
-    {
-      title: 'Analytics',
-      description: 'Ver métricas detalladas',
-      icon: <BarChart3 className="w-5 h-5" />,
-      color: 'bg-purple-500 hover:bg-purple-600',
-      onClick: () => onNavigate('analytics'),
-    }
-  ];
+  const kpiMetrics = useMemo(() => {
+    const activosPercentage = stats.total > 0 ? Math.round((stats.activos / stats.total) * 100) : 0;
+    const vencidosPercentage = stats.total > 0 ? Math.round((stats.vencidos / stats.total) * 100) : 0;
+    
+    return [
+      {
+        title: 'Total Socios',
+        value: stats.total.toLocaleString(),
+        change: growthMetrics.growthRate,
+        icon: <Users className="w-6 h-6 lg:w-7 lg:h-7" />,
+        gradient: 'from-blue-500 to-cyan-500',
+        subtitle: 'Miembros registrados',
+        trend: growthMetrics.growthRate > 0 ? 'up' as const : 'neutral' as const,
+        onClick: () => onNavigate('socios'),
+        loading: sociosLoading
+      },
+      {
+        title: 'Socios Activos',
+        value: `${stats.activos.toLocaleString()} (${activosPercentage}%)`,
+        change: activosPercentage,
+        icon: <CheckCircle className="w-6 h-6 lg:w-7 lg:h-7" />,
+        gradient: 'from-emerald-500 to-teal-500',
+        subtitle: 'Estado vigente',
+        trend: activosPercentage > 80 ? 'up' as const : activosPercentage > 60 ? 'neutral' as const : 'down' as const,
+        onClick: () => onNavigate('socios'),
+        loading: sociosLoading
+      },
+      {
+        title: 'Socios Vencidos',
+        value: `${stats.vencidos.toString()} (${vencidosPercentage}%)`,
+        change: vencidosPercentage > 0 ? -vencidosPercentage : 0,
+        icon: <AlertCircle className="w-6 h-6 lg:w-7 lg:h-7" />,
+        gradient: 'from-red-500 to-pink-500',
+        subtitle: 'Requieren atención',
+        trend: vencidosPercentage > 20 ? 'up' as const : vencidosPercentage > 10 ? 'neutral' as const : 'down' as const,
+        onClick: () => onNavigate('socios'),
+        loading: sociosLoading,
+        badge: vencidosPercentage > 15 ? 'Crítico' : undefined
+      }
+    ];
+  }, [stats, growthMetrics, sociosLoading, onNavigate]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-6 lg:p-8"
+      >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
             <div className="flex items-center space-x-4 mb-4">
-              <div className="w-16 h-16 bg-slate-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-8 h-8 text-white" />
+              <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-slate-600 to-slate-800 rounded-3xl flex items-center justify-center shadow-2xl">
+                <BarChart3 className="w-8 h-8 lg:w-10 lg:h-10 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">
+                <h1 className="text-3xl lg:text-4xl font-bold text-slate-900">
                   Vista General
                 </h1>
-                <p className="text-lg text-slate-600 mt-1">
+                <p className="text-lg lg:text-xl text-slate-600 mt-1">
                   Panel de control • {format(new Date(), 'EEEE, dd MMMM yyyy', { locale: es })}
                 </p>
               </div>
@@ -571,26 +699,30 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
           
           <div className="flex items-center space-x-4">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => window.location.reload()}
-              className="w-10 h-10 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 transition-colors duration-200"
+              className="w-12 h-12 bg-white/80 hover:bg-white border border-slate-200 hover:border-slate-300 rounded-2xl flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               <RefreshCw className="w-5 h-5" />
-            </button>
+            </motion.button>
             
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onAddMember}
-              className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 flex items-center space-x-2 shadow-lg"
+              className="bg-gradient-to-r from-slate-600 to-slate-800 hover:from-slate-700 hover:to-slate-900 text-white px-6 lg:px-8 py-3 lg:py-4 rounded-2xl font-semibold transition-all duration-300 flex items-center space-x-2 shadow-xl hover:shadow-2xl"
             >
               <UserPlus className="w-5 h-5" />
               <span>Nuevo Socio</span>
-            </button>
+            </motion.button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Quick Stats */}
-      <QuickStats
+      <ModernQuickStats
         totalSocios={stats.total}
         activosSocios={stats.activos}
         totalComercios={comerciosStats.comerciosActivos}
@@ -598,48 +730,26 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
         {kpiMetrics.map((metric, index) => (
-          <KPICard key={index} {...metric} />
+          <ModernKPICard key={index} {...metric} delay={index * 0.1} />
         ))}
       </div>
 
       {/* Secondary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ActivityTimeline
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+        <div className="xl:col-span-2">
+          <ModernActivityTimeline
             activities={activities}
             loading={loading}
             onViewAll={() => onNavigate('notificaciones')}
           />
         </div>
         <div>
-          <SystemStatusCard
+          <ModernSystemStatusCard
             health={{ ...systemHealth, status: healthStatus }}
             loading={loading}
           />
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-xl font-semibold text-slate-900 mb-4">Acciones Rápidas</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {quickActions.map((action, index) => (
-            <button
-              key={index}
-              onClick={action.onClick}
-              className={`p-4 rounded-xl text-white transition-all duration-200 hover:shadow-lg hover:-translate-y-1 ${action.color}`}
-            >
-              <div className="text-center">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  {action.icon}
-                </div>
-                <h4 className="font-medium mb-1">{action.title}</h4>
-                <p className="text-sm opacity-90">{action.description}</p>
-              </div>
-            </button>
-          ))}
         </div>
       </div>
     </div>

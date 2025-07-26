@@ -130,7 +130,7 @@ export function useSocioProfile(): UseSocioProfileReturn {
       
       setHistorialValidaciones(result.validaciones);
       setHasMoreValidaciones(result.hasMore);
-      setLastValidacionDoc(result.lastDoc);
+      setLastValidacionDoc(result.lastDoc as QueryDocumentSnapshot<DocumentData> | null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error al cargar historial';
       setError(errorMessage);
@@ -150,12 +150,12 @@ export function useSocioProfile(): UseSocioProfileReturn {
       const result = await validacionesService.getHistorialValidaciones(
         socioId, 
         20, 
-        lastValidacionDoc
+        lastValidacionDoc || undefined
       );
       
       setHistorialValidaciones(prev => [...prev, ...result.validaciones]);
       setHasMoreValidaciones(result.hasMore);
-      setLastValidacionDoc(result.lastDoc);
+      setLastValidacionDoc(result.lastDoc as QueryDocumentSnapshot<DocumentData> | null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error al cargar más validaciones';
       setError(errorMessage);

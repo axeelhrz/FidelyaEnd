@@ -1,21 +1,17 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   QrCode,
   Download,
-  Share,
   Copy,
-  Check,
+  Share2,
   Printer,
-  RefreshCw,
-  Store,
-  AlertCircle,
-  Loader2
+  Loader2,
+  CheckCircle,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import QRCodeLib from 'qrcode';
 import Image from 'next/image';
 
@@ -28,8 +24,8 @@ interface QRGeneratorModalProps {
     qrCode?: string;
     qrCodeUrl?: string;
   } | null;
-  onGenerateQR: (comercioId: string) => Promise<{ qrCode: string; qrCodeUrl: string } | null>;
-  loading?: boolean;
+  onGenerateQR: (comercioId: string) => Promise<{ qrCode: string; qrCodeUrl: string }>;
+  loading: boolean;
 }
 
 export const QRGeneratorModal: React.FC<QRGeneratorModalProps> = ({
@@ -38,442 +34,336 @@ export const QRGeneratorModal: React.FC<QRGeneratorModalProps> = ({
   comercio,
   onGenerateQR,
 }) => {
-  const [qrDataURL, setQrDataURL] = useState<string>('');
-  const [qrText, setQrText] = useState<string>('');
-  const [copied, setCopied] = useState(false);
+  const [qrData, setQrData] = useState<{ qrCode: string; qrCodeUrl: string } | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [qrSize, setQrSize] = useState(256);
-  const [includeText, setIncludeText] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Generar QR cuando se abre el modal
-  const generateQRCode = React.useCallback(async () => {
+  const handleGenerateQR = async () => {
     if (!comercio) return;
 
     setGenerating(true);
     try {
-      // Primero intentar generar desde el servicio
       const result = await onGenerateQR(comercio.id);
+      setQrData(result);
       
-      let qrCodeData = result?.qrCode || comercio.qrCode;
-      
-      // Si no hay QR code, generar uno temporal
-      if (!qrCodeData) {
-        qrCodeData = `https://fidelya.app/validar/${comercio.id}`;
+      // Generate QR code on canvas for download
+      if (canvasRef.current) {
+        await QRCodeLib.toCanvas(canvasRef.current, result.qrCodeUrl, {
+          width: 300,
+          margin: 2,
+          color: {
+            dark: '#1e293b',
+            light: '#ffffff'
+          }
+        });
       }
-
-      setQrText(qrCodeData);
-
-      // Generar imagen QR
-      const qrOptions = {
-        width: qrSize,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      };
-
-      const qrDataURL = await QRCodeLib.toDataURL(qrCodeData, qrOptions);
-      setQrDataURL(qrDataURL);
     } catch (error) {
       console.error('Error generating QR:', error);
-      toast.error('Error al generar el código QR');
     } finally {
       setGenerating(false);
     }
-  }, [comercio, onGenerateQR, qrSize]);
+  };
 
-  useEffect(() => {
-    if (open && comercio) {
-      generateQRCode();
-    }
-  }, [open, comercio, generateQRCode]);
-
-  // Regenerar QR cuando cambia el tamaño
-  useEffect(() => {
-    if (qrText) {
-      const generateWithNewSize = async () => {
-        try {
-          const qrOptions = {
-            width: qrSize,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
-            }
-          };
-          const qrDataURL = await QRCodeLib.toDataURL(qrText, qrOptions);
-          setQrDataURL(qrDataURL);
-        } catch (error) {
-          console.error('Error regenerating QR:', error);
-        }
-      };
-      generateWithNewSize();
-    }
-  }, [qrSize, qrText]);
-
-  const handleCopyText = async () => {
-    if (!qrText) return;
-    
-    try {
-      await navigator.clipboard.writeText(qrText);
-      setCopied(true);
-      toast.success('Texto copiado al portapapeles');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Error al copiar el texto');
+  const handleCopyUrl = async () => {
+    if (qrData?.qrCodeUrl) {
+      try {
+        await navigator.clipboard.writeText(qrData.qrCodeUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (error) {
+        console.error('Error copying to clipboard:', error);
+      }
     }
   };
 
   const handleDownload = () => {
-    if (!qrDataURL || !comercio) return;
-
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new window.Image();
-
-    img.onload = () => {
-      // Calcular dimensiones del canvas
-      const padding = 40;
-      const textHeight = includeText ? 60 : 0;
-      canvas.width = qrSize + (padding * 2);
-      canvas.height = qrSize + (padding * 2) + textHeight;
-
-      if (!ctx) return;
-
-      // Fondo blanco
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Dibujar QR
-      ctx.drawImage(img, padding, padding, qrSize, qrSize);
-
-      // Agregar texto si está habilitado
-      if (includeText) {
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(
-          comercio.nombreComercio,
-          canvas.width / 2,
-          qrSize + padding + 30
-        );
-        
-        ctx.font = '12px Arial';
-        ctx.fillText(
-          'Escanea para validar beneficios',
-          canvas.width / 2,
-          qrSize + padding + 50
-        );
-      }
-
-      // Descargar
+    if (canvasRef.current) {
       const link = document.createElement('a');
-      link.download = `QR_${comercio.nombreComercio.replace(/\s+/g, '_')}.png`;
-      link.href = canvas.toDataURL();
+      link.download = `QR_${comercio?.nombreComercio}_${new Date().toISOString().split('T')[0]}.png`;
+      link.href = canvasRef.current.toDataURL();
       link.click();
-      
-      toast.success('QR descargado correctamente');
-    };
-
-    img.src = qrDataURL;
-  };
-
-  const handlePrint = () => {
-    if (!qrDataURL || !comercio) return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR Code - ${comercio.nombreComercio}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              text-align: center;
-              margin: 20px;
-            }
-            .qr-container {
-              display: inline-block;
-              border: 2px solid #000;
-              padding: 20px;
-              margin: 20px;
-            }
-            .qr-title {
-              font-size: 18px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            }
-            .qr-subtitle {
-              font-size: 14px;
-              color: #666;
-              margin-top: 10px;
-            }
-            @media print {
-              body { margin: 0; }
-              .qr-container { border: 1px solid #000; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="qr-container">
-            <div class="qr-title">${comercio.nombreComercio}</div>
-            <img src="${qrDataURL}" alt="QR Code" style="width: ${qrSize}px; height: ${qrSize}px;" />
-            <div class="qr-subtitle">Escanea para validar beneficios</div>
-          </div>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.print();
-  };
-
-  const handleShare = async () => {
-    if (!qrDataURL || !comercio) return;
-
-    try {
-      // Convertir data URL a blob
-      const response = await fetch(qrDataURL);
-      const blob = await response.blob();
-      const file = new File([blob], `QR_${comercio.nombreComercio}.png`, { type: 'image/png' });
-
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: `QR Code - ${comercio.nombreComercio}`,
-          text: 'Código QR para validar beneficios',
-          files: [file]
-        });
-      } else {
-        // Fallback: copiar imagen al portapapeles
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'image/png': blob
-          })
-        ]);
-        toast.success('QR copiado al portapapeles');
-      }
-    } catch (error) {
-      console.error('Error sharing QR:', error);
-      toast.error('Error al compartir el QR');
     }
   };
 
-  const handleClose = () => {
-    setQrDataURL('');
-    setQrText('');
-    setCopied(false);
-    setGenerating(false);
-    onClose();
+  const handlePrint = () => {
+    if (canvasRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const img = canvasRef.current.toDataURL();
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>QR Code - ${comercio?.nombreComercio}</title>
+              <style>
+                body { 
+                  margin: 0; 
+                  padding: 20px; 
+                  display: flex; 
+                  flex-direction: column; 
+                  align-items: center; 
+                  font-family: Arial, sans-serif; 
+                }
+                .header { 
+                  text-align: center; 
+                  margin-bottom: 20px; 
+                }
+                .qr-container { 
+                  text-align: center; 
+                }
+                img { 
+                  max-width: 300px; 
+                  height: auto; 
+                }
+                .footer { 
+                  margin-top: 20px; 
+                  text-align: center; 
+                  color: #666; 
+                  font-size: 12px; 
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h2>${comercio?.nombreComercio}</h2>
+                <p>Código QR para validación de beneficios</p>
+              </div>
+              <div class="qr-container">
+                <img src="${img}" alt="QR Code" />
+              </div>
+              <div class="footer">
+                <p>Generado el ${new Date().toLocaleDateString()}</p>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const handleShare = async () => {
+    if (qrData?.qrCodeUrl && navigator.share) {
+      try {
+        await navigator.share({
+          title: `QR Code - ${comercio?.nombreComercio}`,
+          text: 'Código QR para validación de beneficios',
+          url: qrData.qrCodeUrl
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    }
   };
 
   if (!open || !comercio) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        {/* Backdrop */}
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        {/* Backdrop with blur effect */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={handleClose}
+          className="fixed inset-0 backdrop-blur-md bg-white/30"
+          onClick={onClose}
         />
 
-        {/* Dialog */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full relative z-10"
-        >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <QrCode className="w-6 h-6 text-white" />
+        {/* Modal Container */}
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", duration: 0.5 }}
+            className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-8 py-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                    <QrCode className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      Código QR
+                    </h2>
+                    <p className="text-indigo-100">
+                      {comercio.nombreComercio}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    Código QR
-                  </h3>
-                  <p className="text-indigo-100 text-sm">
-                    {comercio.nombreComercio}
-                  </p>
-                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={onClose}
+                  className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white hover:bg-white/30 transition-all duration-200"
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
               </div>
-              <button
-                onClick={handleClose}
-                className="text-white hover:text-indigo-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12" />
             </div>
-          </div>
 
-          {/* Content */}
-          <div className="px-6 py-6">
-            {generating ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
-                <p className="text-gray-600">Generando código QR...</p>
-              </div>
-            ) : qrDataURL ? (
-              <div className="space-y-6">
-                {/* QR Display */}
-                <div className="flex justify-center">
+            {/* Content */}
+            <div className="p-8">
+              {!qrData && !comercio.qrCode ? (
+                /* Generate QR Section */
+                <div className="text-center space-y-6">
+                  <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto">
+                    <QrCode className="w-12 h-12 text-indigo-600" />
+                  </div>
+                  
                   <div>
-                    <Image
-                      src={qrDataURL}
-                      alt="QR Code"
-                      className="mx-auto"
-                      width={qrSize}
-                      height={qrSize}
-                      style={{ width: qrSize, height: qrSize }}
-                      unoptimized
-                      priority
-                    />
-                    {includeText && (
-                      <div className="text-center mt-4">
-                        <p className="font-semibold text-gray-900">{comercio.nombreComercio}</p>
-                        <p className="text-sm text-gray-600">Escanea para validar beneficios</p>
-                      </div>
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                      Generar Código QR
+                    </h3>
+                    <p className="text-slate-600">
+                      Crea un código QR único para que los socios puedan validar sus beneficios en este comercio.
+                    </p>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleGenerateQR}
+                    disabled={generating}
+                    className="w-full px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
+                  >
+                    {generating ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Generando QR...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-5 h-5" />
+                        <span>Generar Código QR</span>
+                      </>
                     )}
-                  </div>
+                  </motion.button>
                 </div>
-
-                {/* Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tamaño del QR
-                    </label>
-                    <select
-                      value={qrSize}
-                      onChange={(e) => setQrSize(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    >
-                      <option value={128}>Pequeño (128px)</option>
-                      <option value={256}>Mediano (256px)</option>
-                      <option value={512}>Grande (512px)</option>
-                      <option value={1024}>Extra Grande (1024px)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={includeText}
-                        onChange={(e) => setIncludeText(e.target.checked)}
-                        className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              ) : (
+                /* QR Display Section */
+                <div className="space-y-6">
+                  {/* QR Code Display */}
+                  <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-8 border border-slate-200 text-center">
+                    <div className="inline-block p-4 bg-white rounded-2xl shadow-lg">
+                      <Image
+                        src={qrData?.qrCode || comercio.qrCode || ''}
+                        alt="QR Code"
+                        width={192}
+                        height={192}
+                        className="w-48 h-48 mx-auto"
+                        unoptimized
                       />
-                      <span className="text-sm font-medium text-gray-700">
-                        Incluir texto descriptivo
-                      </span>
-                    </label>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <p className="text-sm text-slate-600">
+                        Código QR para validación de beneficios
+                      </p>
+                      {(qrData?.qrCodeUrl || comercio.qrCodeUrl) && (
+                        <div className="mt-2 flex items-center justify-center space-x-2">
+                          <ExternalLink className="w-4 h-4 text-slate-400" />
+                          <span className="text-xs text-slate-500 font-mono truncate max-w-xs">
+                            {qrData?.qrCodeUrl || comercio.qrCodeUrl}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* QR Text */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    URL del código QR
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={qrText}
-                      readOnly
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                    />
-                    <button
-                      onClick={handleCopyText}
-                      className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
-                      title="Copiar URL"
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDownload}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-all duration-200 font-medium"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Descargar</span>
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleCopyUrl}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all duration-200 font-medium"
                     >
                       {copied ? (
-                        <Check className="w-4 h-4 text-green-600" />
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>¡Copiado!</span>
+                        </>
                       ) : (
-                        <Copy className="w-4 h-4 text-gray-600" />
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>Copiar URL</span>
+                        </>
                       )}
-                    </button>
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handlePrint}
+                      className="flex items-center justify-center space-x-2 px-4 py-3 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 transition-all duration-200 font-medium"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Imprimir</span>
+                    </motion.button>
+
+                    {typeof navigator.share === 'function' && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleShare}
+                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-orange-100 text-orange-700 rounded-xl hover:bg-orange-200 transition-all duration-200 font-medium"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span>Compartir</span>
+                      </motion.button>
+                    )}
                   </div>
-                </div>
 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={handleDownload}
-                    className="flex-1 min-w-[120px] inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Descargar
-                  </button>
-
-                  <button
-                    onClick={handlePrint}
-                    className="flex-1 min-w-[120px] inline-flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    <Printer className="w-4 h-4 mr-2" />
-                    Imprimir
-                  </button>
-
-                  <button
-                    onClick={handleShare}
-                    className="flex-1 min-w-[120px] inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Share className="w-4 h-4 mr-2" />
-                    Compartir
-                  </button>
-
-                  <button
-                    onClick={generateQRCode}
+                  {/* Regenerate Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleGenerateQR}
                     disabled={generating}
-                    className="flex-1 min-w-[120px] inline-flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
+                    className="w-full px-6 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all duration-200 font-medium border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                   >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                    Regenerar
-                  </button>
+                    {generating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Regenerando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4" />
+                        <span>Regenerar QR</span>
+                      </>
+                    )}
+                  </motion.button>
                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                <p className="text-gray-600 mb-4">Error al generar el código QR</p>
-                <button
-                  onClick={generateQRCode}
-                  className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Intentar de nuevo
-                </button>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* Footer */}
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                <Store className="w-4 h-4 inline mr-1" />
-                El QR permite validar beneficios en este comercio
-              </div>
-              <button
-                onClick={handleClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cerrar
-              </button>
+              {/* Hidden canvas for download */}
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 };

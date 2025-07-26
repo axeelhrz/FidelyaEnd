@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Store,
@@ -9,94 +9,78 @@ import {
   Globe,
   Clock,
   FileText,
-  Building,
-  AlertCircle,
   Save,
   Loader2
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { Comercio, ComercioFormData } from '@/services/comercio.service';
+import type { Comercio } from '@/services/comercio.service';
 
 interface EditComercioDialogProps {
   open: boolean;
   comercio: Comercio | null;
   onClose: () => void;
-  onSubmit: (id: string, data: Partial<ComercioFormData>) => Promise<boolean>;
-  loading?: boolean;
+  onSubmit: (id: string, data: Partial<Comercio>) => Promise<boolean>;
+  loading: boolean;
 }
-
-const CATEGORIAS_COMERCIO = [
-  'Alimentación',
-  'Librería y Papelería',
-  'Farmacia y Salud',
-  'Restaurantes y Gastronomía',
-  'Retail y Moda',
-  'Salud y Belleza',
-  'Deportes y Fitness',
-  'Tecnología',
-  'Hogar y Decoración',
-  'Automotriz',
-  'Educación',
-  'Entretenimiento',
-  'Servicios Profesionales',
-  'Turismo y Viajes',
-  'Otros'
-];
-
-// Define the configuration type explicitly
-type ConfiguracionKeys = 'notificacionesEmail' | 'notificacionesWhatsApp' | 'autoValidacion' | 'requiereAprobacion';
 
 export const EditComercioDialog: React.FC<EditComercioDialogProps> = ({
   open,
   comercio,
   onClose,
   onSubmit,
-  loading = false
+  loading
 }) => {
-  const [formData, setFormData] = useState<Partial<ComercioFormData>>({});
+  const [formData, setFormData] = useState({
+    nombreComercio: '',
+    categoria: '',
+    descripcion: '',
+    direccion: '',
+    telefono: '',
+    email: '',
+    sitioWeb: '',
+    horario: '',
+    cuit: '',
+    estado: 'activo' as 'activo' | 'inactivo' | 'suspendido',
+    visible: true
+  });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (comercio) {
       setFormData({
-        nombreComercio: comercio.nombreComercio,
-        categoria: comercio.categoria,
-        email: comercio.email,
-        telefono: comercio.telefono || '',
-        direccion: comercio.direccion || '',
+        nombreComercio: comercio.nombreComercio || '',
+        categoria: comercio.categoria || '',
         descripcion: comercio.descripcion || '',
+        direccion: comercio.direccion || '',
+        telefono: comercio.telefono || '',
+        email: comercio.email || '',
         sitioWeb: comercio.sitioWeb || '',
         horario: comercio.horario || '',
         cuit: comercio.cuit || '',
-        configuracion: comercio.configuracion
+        estado: ['activo', 'inactivo', 'suspendido'].includes(comercio.estado as string)
+          ? (comercio.estado as 'activo' | 'inactivo' | 'suspendido')
+          : 'activo',
+        visible: comercio.visible !== false
       });
-      setHasChanges(false);
+      setErrors({});
     }
   }, [comercio]);
 
-  const validateForm = (): boolean => {
+  const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.nombreComercio?.trim()) {
-      newErrors.nombreComercio = 'El nombre del comercio es obligatorio';
+    if (!formData.nombreComercio.trim()) {
+      newErrors.nombreComercio = 'El nombre del comercio es requerido';
     }
-    if (!formData.email?.trim()) {
-      newErrors.email = 'El email es obligatorio';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+
+    if (!formData.categoria.trim()) {
+      newErrors.categoria = 'La categoría es requerida';
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'El email es requerido';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'El email no es válido';
-    }
-    if (!formData.categoria) {
-      newErrors.categoria = 'La categoría es obligatoria';
-    }
-    if (formData.telefono && !/^\+?[\d\s\-\(\)]+$/.test(formData.telefono)) {
-      newErrors.telefono = 'El teléfono no es válido';
-    }
-    if (formData.sitioWeb && !/^https?:\/\/.+/.test(formData.sitioWeb)) {
-      newErrors.sitioWeb = 'El sitio web debe comenzar con http:// o https://';
-    }
-    if (formData.cuit && !/^\d{2}-\d{8}-\d{1}$/.test(formData.cuit)) {
-      newErrors.cuit = 'El CUIT debe tener el formato XX-XXXXXXXX-X';
     }
 
     setErrors(newErrors);
@@ -106,399 +90,345 @@ export const EditComercioDialog: React.FC<EditComercioDialogProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!comercio || !validateForm()) {
-      toast.error('Por favor, corrige los errores en el formulario');
-      return;
-    }
+    if (!validateForm() || !comercio) return;
 
     const success = await onSubmit(comercio.id, formData);
     if (success) {
-      handleClose();
+      onClose();
     }
   };
 
-  const handleClose = () => {
-    setFormData({});
-    setErrors({});
-    setHasChanges(false);
-    onClose();
-  };
-
-  const handleInputChange = (field: keyof ComercioFormData, value: string) => {
+  const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
-  const handleConfigChange = (field: ConfiguracionKeys, value: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      configuracion: {
-        notificacionesEmail: false,
-        notificacionesWhatsApp: false,
-        autoValidacion: false,
-        requiereAprobacion: false,
-        ...prev.configuracion,
-        [field]: value
-      }
-    }));
-    setHasChanges(true);
-  };
-
-  if (!open || !comercio) return null;
+  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleClose} />
-
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        {/* Backdrop with blur effect */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full"
-        >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Store className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    Editar Comercio
-                  </h3>
-                  <p className="text-blue-100 text-sm">
-                    {comercio.nombreComercio}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleClose}
-                className="text-white hover:text-blue-100 transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-          </div>
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 backdrop-blur-md bg-white/30"
+          onClick={onClose}
+        />
 
-          <form onSubmit={handleSubmit}>
-            <div className="px-6 py-6 max-h-96 overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Información Básica */}
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      Información Básica
-                    </h4>
+        {/* Modal Container */}
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", duration: 0.5 }}
+            className="relative w-full max-w-2xl bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 px-8 py-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                    <Store className="w-6 h-6 text-white" />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Store className="w-4 h-4 inline mr-2" />
+                    <h2 className="text-2xl font-bold text-white">
+                      Editar Comercio
+                    </h2>
+                    <p className="text-blue-100">
+                      Actualiza la información del comercio
+                    </p>
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={onClose}
+                  className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white hover:bg-white/30 transition-all duration-200"
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+              
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12" />
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* Basic Information */}
+              <div className="space-y-6">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
+                    <Store className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">Información Básica</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Nombre del Comercio *
                     </label>
                     <input
                       type="text"
-                      value={formData.nombreComercio || ''}
+                      value={formData.nombreComercio}
                       onChange={(e) => handleInputChange('nombreComercio', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.nombreComercio ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                        errors.nombreComercio ? 'border-red-300 bg-red-50' : 'border-slate-200'
                       }`}
-                      placeholder="Ej: Supermercado Central"
+                      placeholder="Nombre del comercio"
                     />
                     {errors.nombreComercio && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.nombreComercio}
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">{errors.nombreComercio}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Mail className="w-4 h-4 inline mr-2" />
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email || ''}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.email ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="comercio@ejemplo.com"
-                    />
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.email}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Categoría *
                     </label>
                     <select
-                      value={formData.categoria || ''}
+                      value={formData.categoria}
                       onChange={(e) => handleInputChange('categoria', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.categoria ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                        errors.categoria ? 'border-red-300 bg-red-50' : 'border-slate-200'
                       }`}
                     >
-                      <option value="">Selecciona una categoría</option>
-                      {CATEGORIAS_COMERCIO.map(categoria => (
-                        <option key={categoria} value={categoria}>
-                          {categoria}
-                        </option>
-                      ))}
+                      <option value="">Seleccionar categoría</option>
+                      <option value="Restaurante">Restaurante</option>
+                      <option value="Retail">Retail</option>
+                      <option value="Servicios">Servicios</option>
+                      <option value="Salud">Salud</option>
+                      <option value="Educación">Educación</option>
+                      <option value="Entretenimiento">Entretenimiento</option>
+                      <option value="Tecnología">Tecnología</option>
+                      <option value="Otros">Otros</option>
                     </select>
                     {errors.categoria && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.categoria}
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">{errors.categoria}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Descripción
+                  </label>
+                  <textarea
+                    value={formData.descripcion}
+                    onChange={(e) => handleInputChange('descripcion', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                    placeholder="Describe tu comercio..."
+                  />
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="space-y-6">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-100 to-blue-100 rounded-lg flex items-center justify-center">
+                    <Mail className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">Información de Contacto</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Email *
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                          errors.email ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                        }`}
+                        placeholder="correo@ejemplo.com"
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-600">{errors.email}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <FileText className="w-4 h-4 inline mr-2" />
-                      Descripción
-                    </label>
-                    <textarea
-                      value={formData.descripcion || ''}
-                      onChange={(e) => handleInputChange('descripcion', e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                      placeholder="Describe brevemente el comercio y sus servicios..."
-                    />
-                  </div>
-                </div>
-
-                {/* Información de Contacto */}
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      Información de Contacto
-                    </h4>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Phone className="w-4 h-4 inline mr-2" />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Teléfono
                     </label>
-                    <input
-                      type="tel"
-                      value={formData.telefono || ''}
-                      onChange={(e) => handleInputChange('telefono', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.telefono ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="+54 11 1234-5678"
-                    />
-                    {errors.telefono && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.telefono}
-                      </p>
-                    )}
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="tel"
+                        value={formData.telefono}
+                        onChange={(e) => handleInputChange('telefono', e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="+54 11 1234-5678"
+                      />
+                    </div>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Building className="w-4 h-4 inline mr-2" />
-                      CUIT
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.cuit || ''}
-                      onChange={(e) => handleInputChange('cuit', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.cuit ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="XX-XXXXXXXX-X"
-                    />
-                    {errors.cuit && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.cuit}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <MapPin className="w-4 h-4 inline mr-2" />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Dirección
                     </label>
-                    <input
-                      type="text"
-                      value={formData.direccion || ''}
-                      onChange={(e) => handleInputChange('direccion', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                      placeholder="Av. Corrientes 1234, CABA"
-                    />
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={formData.direccion}
+                        onChange={(e) => handleInputChange('direccion', e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Dirección completa"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Globe className="w-4 h-4 inline mr-2" />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Sitio Web
                     </label>
-                    <input
-                      type="url"
-                      value={formData.sitioWeb || ''}
-                      onChange={(e) => handleInputChange('sitioWeb', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                        errors.sitioWeb ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="https://www.ejemplo.com"
-                    />
-                    {errors.sitioWeb && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {errors.sitioWeb}
-                      </p>
-                    )}
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="url"
+                        value={formData.sitioWeb}
+                        onChange={(e) => handleInputChange('sitioWeb', e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="https://www.ejemplo.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              <div className="space-y-6">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">Información Adicional</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Horario de Atención
+                    </label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={formData.horario}
+                        onChange={(e) => handleInputChange('horario', e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Lun-Vie 9:00-18:00"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Clock className="w-4 h-4 inline mr-2" />
-                      Horario de Atención
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      CUIT
                     </label>
-                    <input
-                      type="text"
-                      value={formData.horario || ''}
-                      onChange={(e) => handleInputChange('horario', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                      placeholder="Lun-Vie 9:00-18:00"
-                    />
+                    <div className="relative">
+                      <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={formData.cuit}
+                        onChange={(e) => handleInputChange('cuit', e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="20-12345678-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.estado}
+                      onChange={(e) => handleInputChange('estado', e.target.value as 'activo' | 'inactivo' | 'suspendido')}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    >
+                      <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
+                      <option value="suspendido">Suspendido</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Visibilidad
+                    </label>
+                    <div className="flex items-center space-x-3 pt-3">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.visible}
+                          onChange={(e) => handleInputChange('visible', e.target.checked)}
+                          className="w-5 h-5 text-blue-600 bg-slate-50 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <span className="text-sm text-slate-700">Visible para socios</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Configuración */}
-              <div className="mt-8">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  Configuración
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h5 className="font-medium text-gray-900">Notificaciones por Email</h5>
-                      <p className="text-sm text-gray-600">Recibir notificaciones por email</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.configuracion?.notificacionesEmail || false}
-                        onChange={(e) => handleConfigChange('notificacionesEmail', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h5 className="font-medium text-gray-900">Notificaciones por WhatsApp</h5>
-                      <p className="text-sm text-gray-600">Recibir notificaciones por WhatsApp</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.configuracion?.notificacionesWhatsApp || false}
-                        onChange={(e) => handleConfigChange('notificacionesWhatsApp', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h5 className="font-medium text-gray-900">Auto-validación</h5>
-                      <p className="text-sm text-gray-600">Validar automáticamente los beneficios</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.configuracion?.autoValidacion || false}
-                        onChange={(e) => handleConfigChange('autoValidacion', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h5 className="font-medium text-gray-900">Requiere Aprobación</h5>
-                      <p className="text-sm text-gray-600">Los beneficios requieren aprobación</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.configuracion?.requiereAprobacion || false}
-                        onChange={(e) => handleConfigChange('requiereAprobacion', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </form>
 
             {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                {hasChanges && (
-                  <span className="text-orange-600">
-                    • Tienes cambios sin guardar
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button
+            <div className="bg-slate-50 px-8 py-6 border-t border-slate-200">
+              <div className="flex items-center justify-end space-x-4">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   type="button"
-                  onClick={handleClose}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                  onClick={onClose}
+                  className="px-6 py-3 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-all duration-200 font-medium"
                 >
                   Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loading || !hasChanges}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Guardando...
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Guardando...</span>
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Guardar Cambios
+                      <Save className="w-5 h-5" />
+                      <span>Guardar Cambios</span>
                     </>
                   )}
-                </button>
+                </motion.button>
               </div>
             </div>
-          </form>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 };

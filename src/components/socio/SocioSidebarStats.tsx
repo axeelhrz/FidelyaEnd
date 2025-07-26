@@ -9,7 +9,6 @@ import {
 
 interface SocioSidebarStatsProps {
   totalBeneficios: number;
-  ahorroTotal: number;
   beneficiosUsados: number;
   beneficiosEstesMes: number;
   isOpen: boolean;
@@ -17,21 +16,11 @@ interface SocioSidebarStatsProps {
 
 const SocioSidebarStats: React.FC<SocioSidebarStatsProps> = memo(({
   totalBeneficios,
-  ahorroTotal,
   beneficiosUsados,
   beneficiosEstesMes,
   isOpen
 }) => {
   if (!isOpen) return null;
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   const getProgressPercentage = () => {
     if (totalBeneficios === 0) return 0;
@@ -41,46 +30,58 @@ const SocioSidebarStats: React.FC<SocioSidebarStatsProps> = memo(({
   const progressPercentage = getProgressPercentage();
 
   return (
-    <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-br from-gray-50/30 to-white">
-      {/* Compact Stats Grid */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
-          <div className="flex items-center justify-between mb-1">
-            <Gift className="w-4 h-4 text-blue-500" />
-            <span className="text-xs font-medium text-blue-600">{totalBeneficios}</span>
+    <div className="px-4 py-4 border-b border-gray-100 bg-gradient-to-br from-gray-50/50 to-white">
+      {/* Modern Stats Grid */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-3 border border-blue-100/50 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
+              <Gift className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-black text-blue-600">{totalBeneficios}</span>
           </div>
-          <p className="text-xs text-blue-600/80 font-medium">Disponibles</p>
+          <p className="text-xs text-blue-600/80 font-bold">Disponibles</p>
         </div>
         
-        <div className="bg-green-50 rounded-lg p-2.5 border border-green-100">
-          <div className="flex items-center justify-between mb-1">
-            <TrendingUp className="w-4 h-4 text-green-500" />
-            <span className="text-xs font-medium text-green-600">{formatCurrency(ahorroTotal)}</span>
+        <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl p-3 border border-emerald-100/50 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-black text-emerald-600">{beneficiosUsados}</span>
           </div>
-          <p className="text-xs text-green-600/80 font-medium">Ahorrado</p>
+          <p className="text-xs text-emerald-600/80 font-bold">Usados</p>
         </div>
       </div>
       
-      {/* Compact Monthly Summary */}
-      <div className="bg-white rounded-lg p-2.5 border border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-1">
-            <Calendar className="w-3 h-3 text-gray-500" />
-            <span className="text-xs font-medium text-gray-700">Este mes</span>
+      {/* Modern Monthly Summary */}
+      <div className="bg-white rounded-2xl p-3 border border-gray-200/50 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md">
+              <Calendar className="w-3 h-3 text-white" />
+            </div>
+            <span className="text-sm font-bold text-gray-700">Este mes</span>
           </div>
           <div className="flex items-center space-x-2 text-xs text-gray-500">
-            <span>{beneficiosEstesMes}</span>
+            <span className="font-bold">{beneficiosEstesMes}</span>
             <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
-            <span>{progressPercentage.toFixed(0)}%</span>
+            <span className="font-bold">{progressPercentage.toFixed(0)}%</span>
           </div>
         </div>
         
-        {/* Compact Progress Bar */}
-        <div className="w-full bg-gray-200 rounded-full h-1.5">
+        {/* Modern Progress Bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
           <div 
-            className="bg-gradient-to-r from-blue-500 to-purple-600 h-1.5 rounded-full transition-all duration-500 ease-out"
+            className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-2 rounded-full transition-all duration-1000 ease-out shadow-lg"
             style={{ width: `${progressPercentage}%` }}
           ></div>
+        </div>
+        
+        {/* Activity Indicator */}
+        <div className="flex items-center justify-center mt-3 space-x-2">
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+          <span className="text-xs text-gray-500 font-medium">Actividad reciente</span>
         </div>
       </div>
     </div>

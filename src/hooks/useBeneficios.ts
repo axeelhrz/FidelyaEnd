@@ -129,20 +129,23 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     if (!user) return;
 
     try {
-      const filtros: { comercioId?: string; asociacionId?: string } = {};
+      const filtros: { comercioId?: string; asociacionId?: string; socioId?: string } = {};
       
       if (user.role === 'comercio') {
         filtros.comercioId = user.uid;
       } else if (user.role === 'asociacion') {
         filtros.asociacionId = user.uid;
       } else if (user.role === 'socio' && user.asociacionId) {
-        // Para socios, obtener estadísticas de su asociación
+        // Para socios, pasar tanto el socioId como la asociacionId para estadísticas específicas
+        filtros.socioId = user.uid;
         filtros.asociacionId = user.asociacionId;
       }
 
+      console.log('🔍 Cargando estadísticas con filtros:', filtros);
       const estadisticas = await BeneficiosService.obtenerEstadisticas(filtros);
       if (mountedRef.current) {
         setStats(estadisticas);
+        console.log('✅ Estadísticas cargadas:', estadisticas);
       }
     } catch (err) {
       console.error('Error cargando estadísticas:', err);
@@ -431,9 +434,10 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
   const beneficiosAgotados = beneficios.filter(b => b.estado === 'agotado');
   const beneficiosDestacados = beneficios.filter(b => b.destacado);
 
-  // Estadísticas rápidas
+  // Estadísticas rápidas - CORREGIDAS PARA USAR LOS MISMOS DATOS QUE EL SIDEBAR
   const estadisticasRapidas = {
-    total: beneficios.length,
+    // Usar los beneficios filtrados localmente (igual que el sidebar)
+    total: beneficiosActivos.length,
     activos: beneficiosActivos.length,
     usados: beneficiosUsados.length,
     ahorroTotal: beneficiosUsados.reduce((total, uso) => total + (uso.montoDescuento || 0), 0),

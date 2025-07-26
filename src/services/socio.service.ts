@@ -178,14 +178,16 @@ class SocioService {
   }
 
   /**
-   * Create new socio
+   * Create new socio with Firebase Authentication
    */
   async createSocio(asociacionId: string, data: SocioFormData): Promise<string | null> {
     try {
       // Check if DNI already exists
-      const existingDni = await this.checkDniExists(data.dni || '');
-      if (existingDni) {
-        throw new Error('Ya existe un socio con este DNI');
+      if (data.dni) {
+        const existingDni = await this.checkDniExists(data.dni);
+        if (existingDni) {
+          throw new Error('Ya existe un socio con este DNI');
+        }
       }
 
       // Check if email already exists
@@ -206,56 +208,106 @@ class SocioService {
         }
       }
 
-      const socioId = doc(collection(db, this.collection)).id;
+      // Create Firebase Authentication account
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
+      const { auth } = await import('@/lib/firebase');
       
-      // Clean data to remove undefined values
-      const socioData: Record<string, unknown> = {
-        nombre: data.nombre,
-        email: data.email.toLowerCase(),
-        dni: data.dni || '',
-        asociacionId,
-        numeroSocio,
-        estado: data.estado || 'activo',
-        estadoMembresia: data.fechaVencimiento && data.fechaVencimiento > new Date() ? 'al_dia' : 'pendiente',
-        fechaIngreso: serverTimestamp(),
-        montoCuota: data.montoCuota || 0,
-        beneficiosUsados: 0,
-        validacionesRealizadas: 0,
-        creadoEn: serverTimestamp(),
-        actualizadoEn: serverTimestamp(),
-      };
-
-      // Only add optional fields if they have values
-      if (data.telefono) {
-        socioData.telefono = data.telefono;
+      let userCredential;
+      try {
+        if (!data.email || !data.password) {
+          throw new Error('Email y contraseña son requeridos para crear el usuario');
+        }
+        userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      } catch (authError: unknown) {
+        console.error('Error creating Firebase Auth user:', authError);
+        if (authError && typeof authError === 'object' && 'code' in authError) {
+          const firebaseError = authError as { code: string };
+          switch (firebaseError.code) {
+            case 'auth/email-already-in-use':
+              throw new Error('El email ya está registrado en el sistema');
+            case 'auth/weak-password':
+              throw new Error('La contraseña es muy débil');
+            case 'auth/invalid-email':
+              throw new Error('El email no es válido');
+            default:
+              throw new Error('Error al crear la cuenta de usuario');
+          }
+        }
+        throw new Error('Error al crear la cuenta de usuario');
       }
 
-      if (data.direccion) {
-        socioData.direccion = data.direccion;
+      const firebaseUid = userCredential.user.uid;
+      
+      try {
+        // Clean data to remove undefined values and password fields
+        const socioData: Record<string, unknown> = {
+          uid: firebaseUid, // Store Firebase UID
+          nombre: data.nombre,
+          email: data.email.toLowerCase(),
+          dni: data.dni || '',
+          asociacionId,
+          numeroSocio,
+          estado: data.estado || 'activo',
+          estadoMembresia: data.fechaVencimiento && data.fechaVencimiento > new Date() ? 'al_dia' : 'pendiente',
+          fechaIngreso: serverTimestamp(),
+          beneficiosUsados: 0,
+          validacionesRealizadas: 0,
+          creadoEn: serverTimestamp(),
+          actualizadoEn: serverTimestamp(),
+          role: 'socio', // Set role for the user
+        };
+
+        // Only add optional fields if they have values
+        if (data.telefono) {
+          socioData.telefono = data.telefono;
+        }
+
+        // Handle fechaNacimiento
+        if (data.fechaNacimiento) {
+          socioData.fechaNacimiento = Timestamp.fromDate(
+            data.fechaNacimiento instanceof Date
+              ? data.fechaNacimiento
+              : data.fechaNacimiento.toDate()
+          );
+        }
+
+        // Handle fechaVencimiento
+        if (data.fechaVencimiento) {
+          socioData.fechaVencimiento = Timestamp.fromDate(
+            data.fechaVencimiento instanceof Date
+              ? data.fechaVencimiento
+              : data.fechaVencimiento.toDate()
+          );
+        }
+
+        // Create socio document in Firestore using Firebase UID as document ID
+        await setDoc(doc(db, this.collection, firebaseUid), socioData);
+
+        // Also create a user document in the users collection for authentication purposes
+        const userData = {
+          uid: firebaseUid,
+          email: data.email.toLowerCase(),
+          nombre: data.nombre,
+          role: 'socio',
+          estado: data.estado || 'activo',
+          asociacionId,
+          creadoEn: serverTimestamp(),
+          actualizadoEn: serverTimestamp(),
+        };
+
+        await setDoc(doc(db, COLLECTIONS.USERS, firebaseUid), userData);
+
+        console.log('✅ Socio and user account created successfully:', firebaseUid);
+        return firebaseUid;
+      } catch (firestoreError) {
+        // If Firestore creation fails, delete the Firebase Auth user
+        try {
+          await userCredential.user.delete();
+        } catch (deleteError) {
+          console.error('Error deleting Firebase Auth user after Firestore failure:', deleteError);
+        }
+        throw firestoreError;
       }
-
-      // Handle fechaNacimiento
-      if (data.fechaNacimiento) {
-        socioData.fechaNacimiento = Timestamp.fromDate(
-          data.fechaNacimiento instanceof Date
-            ? data.fechaNacimiento
-            : data.fechaNacimiento.toDate()
-        );
-      }
-
-      // Handle fechaVencimiento
-      if (data.fechaVencimiento) {
-        socioData.fechaVencimiento = Timestamp.fromDate(
-          data.fechaVencimiento instanceof Date
-            ? data.fechaVencimiento
-            : data.fechaVencimiento.toDate()
-        );
-      }
-
-      await setDoc(doc(db, this.collection, socioId), socioData);
-
-      console.log('✅ Socio created successfully:', socioId);
-      return socioId;
     } catch (error) {
       handleError(error, 'Create Socio');
       return null;
@@ -552,16 +604,40 @@ class SocioService {
       const snapshot = await getDocs(q);
       const socios = snapshot.docs.map(doc => doc.data());
 
+      // Calcular estadísticas básicas
+      const total = socios.length;
+      const activos = socios.filter(s => s.estado === 'activo').length;
+      const inactivos = socios.filter(s => s.estado === 'inactivo').length;
+      const alDia = socios.filter(s => s.estadoMembresia === 'al_dia').length;
+      const vencidos = socios.filter(s => s.estadoMembresia === 'vencido').length;
+      const pendientes = socios.filter(s => s.estadoMembresia === 'pendiente').length;
+
+      // Calcular ingresos mensuales
+      const ingresosMensuales = socios
+        .filter(s => s.estado === 'activo' && s.estadoMembresia === 'al_dia')
+        .reduce((total, s) => total + (s.montoCuota || 0), 0);
+
+      // Calcular beneficios usados
+      const beneficiosUsados = socios.reduce((total, s) => total + (s.beneficiosUsados || 0), 0);
+
       const stats: SocioStats = {
-        total: socios.length,
-        activos: socios.filter(s => s.estado === 'activo').length,
-        inactivos: socios.filter(s => s.estado === 'inactivo').length,
-        alDia: socios.filter(s => s.estadoMembresia === 'al_dia').length,
-        vencidos: socios.filter(s => s.estadoMembresia === 'vencido').length,
-        pendientes: socios.filter(s => s.estadoMembresia === 'pendiente').length,
-        ingresosMensuales: socios.reduce((total, s) => total + (s.montoCuota || 0), 0),
-        beneficiosUsados: socios.reduce((total, s) => total + (s.beneficiosUsados || 0), 0),
+        total,
+        activos,
+        inactivos,
+        alDia,
+        vencidos,
+        pendientes,
+        ingresosMensuales,
+        beneficiosUsados,
       };
+
+      console.log('📊 Estadísticas calculadas:', {
+        total,
+        activos,
+        vencidos,
+        porcentajeActivos: total > 0 ? Math.round((activos / total) * 100) : 0,
+        porcentajeVencidos: total > 0 ? Math.round((vencidos / total) * 100) : 0
+      });
 
       return stats;
     } catch (error) {
