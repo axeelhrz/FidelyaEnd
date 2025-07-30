@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Unsubscribe } from 'firebase/firestore';
 import { BeneficiosService } from '@/services/beneficios.service';
 import { 
@@ -11,7 +11,8 @@ import {
   BeneficioFilter 
 } from '@/types/beneficio';
 import { useAuth } from './useAuth';
-import toast from 'react-hot-toast';
+import { useDebounce } from './useDebounce';
+import { optimizedNotifications } from '@/lib/optimized-notifications';
 
 interface UseBeneficiosOptions {
   autoLoad?: boolean;
@@ -27,7 +28,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
 
   const { user } = useAuth();
   
-  // Estados principales
+  // Estados principales con referencias estables
   const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
   const [beneficiosUsados, setBeneficiosUsados] = useState<BeneficioUso[]>([]);
   const [stats, setStats] = useState<BeneficioStats | null>(null);
@@ -35,9 +36,56 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Referencias para cleanup
+  // Referencias para optimización
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const mountedRef = useRef(true);
+  const lastDataRef = useRef<{
+    beneficios: Beneficio[];
+    beneficiosUsados: BeneficioUso[];
+    stats: BeneficioStats | null;
+  }>({
+    beneficios: [],
+    beneficiosUsados: [],
+    stats: null
+  });
+
+  // Debounced update functions para evitar actualizaciones muy frecuentes
+  const debouncedSetBeneficios = useDebounce((...args: unknown[]) => {
+    if (!mountedRef.current) return;
+    const newBeneficios = args[0] as Beneficio[];
+    // Solo actualizar si realmente cambió
+    const currentStr = JSON.stringify(lastDataRef.current.beneficios);
+    const newStr = JSON.stringify(newBeneficios);
+    
+    if (currentStr !== newStr) {
+      setBeneficios(newBeneficios);
+      lastDataRef.current.beneficios = newBeneficios;
+    }
+  }, 500);
+
+  const debouncedSetBeneficiosUsados = useDebounce((...args: unknown[]) => {
+    if (!mountedRef.current) return;
+    const newUsados = args[0] as BeneficioUso[];
+    const currentStr = JSON.stringify(lastDataRef.current.beneficiosUsados);
+    const newStr = JSON.stringify(newUsados);
+    
+    if (currentStr !== newStr) {
+      setBeneficiosUsados(newUsados);
+      lastDataRef.current.beneficiosUsados = newUsados;
+    }
+  }, 500);
+
+  const debouncedSetStats = useDebounce((...args: unknown[]) => {
+    if (!mountedRef.current) return;
+    const newStats = args[0] as BeneficioStats | null;
+    const currentStr = JSON.stringify(lastDataRef.current.stats);
+    const newStr = JSON.stringify(newStats);
+    
+    if (currentStr !== newStr) {
+      setStats(newStats);
+      lastDataRef.current.stats = newStats;
+    }
+  }, 1000);
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -50,7 +98,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     };
   }, []);
 
-  // Cargar beneficios según el rol del usuario - ACTUALIZADO PARA SOCIOS
+  // Cargar beneficios con cache y optimizaciones
   const cargarBeneficios = useCallback(async (filtros?: BeneficioFilter) => {
     if (!user || loading) return;
 
@@ -60,19 +108,29 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
 
       let beneficiosData: Beneficio[] = [];
 
+      console.log('🔍 Usuario actual:', {
+        uid: user.uid,
+        role: user.role,
+        asociacionId: user.asociacionId,
+        email: user.email
+      });
+
       switch (user.role) {
         case 'socio':
           if (user.asociacionId) {
-            console.log('🔍 Cargando beneficios para socio:', user.uid);
-            // Usar el método actualizado que incluye comercios afiliados
+            console.log('🔍 Cargando beneficios para socio con asociación:', user.uid, 'asociación:', user.asociacionId);
             beneficiosData = await BeneficiosService.obtenerBeneficiosDisponibles(
               user.uid,
               user.asociacionId,
               filtros
             );
           } else {
-            console.warn('⚠️ Socio sin asociación asignada');
-            setError('No tienes una asociación asignada. Contacta al administrador.');
+            console.log('🔍 Cargando beneficios para socio sin asociación:', user.uid);
+            beneficiosData = await BeneficiosService.obtenerBeneficiosDisponibles(
+              user.uid,
+              undefined,
+              filtros
+            );
           }
           break;
 
@@ -88,43 +146,40 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
           console.warn('Rol de usuario no reconocido:', user.role);
       }
 
-      if (mountedRef.current) {
-        setBeneficios(beneficiosData);
-        console.log(`✅ Se cargaron ${beneficiosData.length} beneficios para ${user.role}`);
-      }
+      // Usar debounced update
+      debouncedSetBeneficios(beneficiosData);
+      console.log(`✅ Se cargaron ${beneficiosData.length} beneficios para ${user.role}`);
     } catch (err) {
       console.error('Error cargando beneficios:', err);
       if (mountedRef.current) {
         const errorMessage = err instanceof Error ? err.message : 'Error al cargar beneficios';
         setError(errorMessage);
-        toast.error(errorMessage);
+        optimizedNotifications.error(errorMessage);
       }
     } finally {
       if (mountedRef.current) {
         setLoading(false);
       }
     }
-  }, [user, loading]);
+  }, [user, loading, debouncedSetBeneficios]);
 
-  // Cargar historial de usos (solo para socios)
+  // Cargar historial de usos optimizado
   const cargarHistorialUsos = useCallback(async () => {
     if (!user || user.role !== 'socio') return;
 
     try {
       const usos = await BeneficiosService.obtenerHistorialUsos(user.uid);
-      if (mountedRef.current) {
-        setBeneficiosUsados(usos);
-        console.log(`✅ Se cargaron ${usos.length} usos del historial`);
-      }
+      debouncedSetBeneficiosUsados(usos);
+      console.log(`✅ Se cargaron ${usos.length} usos del historial`);
     } catch (err) {
       console.error('Error cargando historial de usos:', err);
       if (mountedRef.current) {
-        toast.error('Error al cargar el historial de beneficios');
+        optimizedNotifications.error('Error al cargar el historial de beneficios');
       }
     }
-  }, [user]);
+  }, [user, debouncedSetBeneficiosUsados]);
 
-  // Cargar estadísticas
+  // Cargar estadísticas optimizado
   const cargarEstadisticas = useCallback(async () => {
     if (!user) return;
 
@@ -136,27 +191,23 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       } else if (user.role === 'asociacion') {
         filtros.asociacionId = user.uid;
       } else if (user.role === 'socio' && user.asociacionId) {
-        // Para socios, pasar tanto el socioId como la asociacionId para estadísticas específicas
         filtros.socioId = user.uid;
         filtros.asociacionId = user.asociacionId;
       }
 
       console.log('🔍 Cargando estadísticas con filtros:', filtros);
       const estadisticas = await BeneficiosService.obtenerEstadisticas(filtros);
-      if (mountedRef.current) {
-        setStats(estadisticas);
-        console.log('✅ Estadísticas cargadas:', estadisticas);
-      }
+      debouncedSetStats(estadisticas);
+      console.log('✅ Estadísticas cargadas:', estadisticas);
     } catch (err) {
       console.error('Error cargando estadísticas:', err);
     }
-  }, [user]);
+  }, [user, debouncedSetStats]);
 
-  // Configurar listener en tiempo real - ACTUALIZADO PARA SOCIOS
+  // Configurar listener en tiempo real optimizado
   const configurarRealtime = useCallback(() => {
     if (!user || !useRealtime) return;
 
-    // Limpiar listener anterior
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
     }
@@ -169,10 +220,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
             user.uid,
             user.asociacionId,
             (beneficiosData) => {
-              if (mountedRef.current) {
-                setBeneficios(beneficiosData);
-                console.log(`🔄 Beneficios actualizados en tiempo real: ${beneficiosData.length}`);
-              }
+              debouncedSetBeneficios(beneficiosData);
+              console.log(`🔄 Beneficios actualizados en tiempo real: ${beneficiosData.length}`);
             }
           );
         }
@@ -182,16 +231,14 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
         unsubscribeRef.current = BeneficiosService.suscribirBeneficiosComercio(
           user.uid,
           (beneficiosData) => {
-            if (mountedRef.current) {
-              setBeneficios(beneficiosData);
-            }
+            debouncedSetBeneficios(beneficiosData);
           }
         );
         break;
     }
-  }, [user, useRealtime]);
+  }, [user, useRealtime, debouncedSetBeneficios]);
 
-  // Efecto principal para cargar datos
+  // Efecto principal optimizado
   useEffect(() => {
     if (autoLoad && user) {
       if (useRealtime) {
@@ -208,10 +255,59 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     }
   }, [user, autoLoad, useRealtime, cargarBeneficios, cargarHistorialUsos, cargarEstadisticas, configurarRealtime]);
 
-  // Funciones de acción
+  // Datos derivados memoizados para evitar recálculos
+  const beneficiosActivos = useMemo(() => 
+    beneficios.filter(b => b.estado === 'activo'), 
+    [beneficios]
+  );
+
+  const beneficiosInactivos = useMemo(() => 
+    beneficios.filter(b => b.estado === 'inactivo'), 
+    [beneficios]
+  );
+
+  const beneficiosVencidos = useMemo(() => 
+    beneficios.filter(b => b.estado === 'vencido'), 
+    [beneficios]
+  );
+
+  const beneficiosAgotados = useMemo(() => 
+    beneficios.filter(b => b.estado === 'agotado'), 
+    [beneficios]
+  );
+
+  const beneficiosDestacados = useMemo(() => 
+    beneficios.filter(b => b.destacado), 
+    [beneficios]
+  );
+
+  // Estadísticas rápidas memoizadas y estables
+  const estadisticasRapidas = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const ahorroEsteMes = beneficiosUsados
+      .filter(uso => {
+        const fecha = uso.fechaUso.toDate();
+        return fecha.getMonth() === currentMonth && fecha.getFullYear() === currentYear;
+      })
+      .reduce((total, uso) => total + (uso.montoDescuento || 0), 0);
+
+    return {
+      total: beneficiosActivos.length,
+      disponibles: beneficiosActivos.length, // Beneficios disponibles para usar
+      activos: beneficiosActivos.length,
+      usados: beneficiosUsados.length, // Beneficios que ya ha usado el socio
+      ahorroTotal: beneficiosUsados.reduce((total, uso) => total + (uso.montoDescuento || 0), 0),
+      ahorroEsteMes
+    };
+  }, [beneficiosActivos.length, beneficiosUsados]);
+
+  // Funciones de acción optimizadas
   const crearBeneficio = useCallback(async (data: BeneficioFormData): Promise<boolean> => {
     if (!user || (user.role !== 'comercio' && user.role !== 'asociacion')) {
-      toast.error('No tienes permisos para crear beneficios');
+      optimizedNotifications.error('No tienes permisos para crear beneficios');
       return false;
     }
 
@@ -219,9 +315,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       setLoading(true);
       
       await BeneficiosService.crearBeneficio(data, user.uid, user.role);
-      toast.success('Beneficio creado exitosamente');
+      optimizedNotifications.success('Beneficio creado exitosamente');
       
-      // Recargar datos
       if (!useRealtime) {
         await cargarBeneficios();
       }
@@ -230,7 +325,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al crear beneficio';
-      toast.error(message);
+      optimizedNotifications.error(message);
       setError(message);
       return false;
     } finally {
@@ -240,7 +335,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
 
   const actualizarBeneficio = useCallback(async (id: string, data: Partial<BeneficioFormData>): Promise<boolean> => {
     if (!user || (user.role !== 'comercio' && user.role !== 'asociacion')) {
-      toast.error('No tienes permisos para actualizar beneficios');
+      optimizedNotifications.error('No tienes permisos para actualizar beneficios');
       return false;
     }
 
@@ -248,9 +343,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       setLoading(true);
       await BeneficiosService.actualizarBeneficio(id, data);
       
-      toast.success('Beneficio actualizado exitosamente');
+      optimizedNotifications.success('Beneficio actualizado exitosamente');
       
-      // Recargar datos
       if (!useRealtime) {
         await cargarBeneficios();
       }
@@ -259,7 +353,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al actualizar beneficio';
-      toast.error(message);
+      optimizedNotifications.error(message);
       setError(message);
       return false;
     } finally {
@@ -269,7 +363,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
 
   const eliminarBeneficio = useCallback(async (id: string): Promise<boolean> => {
     if (!user || (user.role !== 'comercio' && user.role !== 'asociacion')) {
-      toast.error('No tienes permisos para eliminar beneficios');
+      optimizedNotifications.error('No tienes permisos para eliminar beneficios');
       return false;
     }
 
@@ -277,9 +371,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       setLoading(true);
       await BeneficiosService.eliminarBeneficio(id);
       
-      toast.success('Beneficio eliminado exitosamente');
+      optimizedNotifications.success('Beneficio eliminado exitosamente');
       
-      // Recargar datos
       if (!useRealtime) {
         await cargarBeneficios();
       }
@@ -288,7 +381,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al eliminar beneficio';
-      toast.error(message);
+      optimizedNotifications.error(message);
       setError(message);
       return false;
     } finally {
@@ -301,7 +394,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     estado: 'activo' | 'inactivo' | 'vencido' | 'agotado'
   ): Promise<boolean> => {
     if (!user || (user.role !== 'comercio' && user.role !== 'asociacion')) {
-      toast.error('No tienes permisos para cambiar el estado del beneficio');
+      optimizedNotifications.error('No tienes permisos para cambiar el estado del beneficio');
       return false;
     }
 
@@ -316,9 +409,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
         'agotado': 'marcado como agotado'
       }[estado];
       
-      toast.success(`Beneficio ${estadoTexto} exitosamente`);
+      optimizedNotifications.success(`Beneficio ${estadoTexto} exitosamente`);
       
-      // Recargar datos
       if (!useRealtime) {
         await cargarBeneficios();
       }
@@ -327,7 +419,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cambiar estado del beneficio';
-      toast.error(message);
+      optimizedNotifications.error(message);
       setError(message);
       return false;
     } finally {
@@ -341,12 +433,12 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     montoOriginal?: number
   ): Promise<boolean> => {
     if (!user || user.role !== 'socio') {
-      toast.error('Solo los socios pueden usar beneficios');
+      optimizedNotifications.error('Solo los socios pueden usar beneficios');
       return false;
     }
 
     if (!user.asociacionId) {
-      toast.error('Debes estar asociado a una asociación para usar beneficios');
+      optimizedNotifications.error('Debes estar asociado a una asociación para usar beneficios');
       return false;
     }
 
@@ -367,9 +459,8 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
         montoOriginal
       );
       
-      toast.success('¡Beneficio usado exitosamente!');
+      optimizedNotifications.success('¡Beneficio usado exitosamente!');
       
-      // Recargar datos
       await Promise.all([
         cargarHistorialUsos(),
         cargarEstadisticas(),
@@ -379,7 +470,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al usar beneficio';
-      toast.error(message);
+      optimizedNotifications.error(message);
       setError(message);
       return false;
     } finally {
@@ -396,7 +487,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
       return resultados;
     } catch (err) {
       console.error('Error en búsqueda:', err);
-      toast.error('Error al buscar beneficios');
+      optimizedNotifications.error('Error al buscar beneficios');
       return [];
     }
   }, []);
@@ -414,10 +505,10 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
         cargarEstadisticas()
       ].filter(Boolean));
       
-      toast.success('Datos actualizados');
+      optimizedNotifications.success('Datos actualizados');
     } catch (err) {
       console.error('Error al refrescar:', err);
-      toast.error('Error al actualizar datos');
+      optimizedNotifications.error('Error al actualizar datos');
     } finally {
       setRefreshing(false);
     }
@@ -426,29 +517,6 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
   const filtrarBeneficios = useCallback(async (filtros: BeneficioFilter) => {
     await cargarBeneficios(filtros);
   }, [cargarBeneficios]);
-
-  // Datos derivados
-  const beneficiosActivos = beneficios.filter(b => b.estado === 'activo');
-  const beneficiosInactivos = beneficios.filter(b => b.estado === 'inactivo');
-  const beneficiosVencidos = beneficios.filter(b => b.estado === 'vencido');
-  const beneficiosAgotados = beneficios.filter(b => b.estado === 'agotado');
-  const beneficiosDestacados = beneficios.filter(b => b.destacado);
-
-  // Estadísticas rápidas - CORREGIDAS PARA USAR LOS MISMOS DATOS QUE EL SIDEBAR
-  const estadisticasRapidas = {
-    // Usar los beneficios filtrados localmente (igual que el sidebar)
-    total: beneficiosActivos.length,
-    activos: beneficiosActivos.length,
-    usados: beneficiosUsados.length,
-    ahorroTotal: beneficiosUsados.reduce((total, uso) => total + (uso.montoDescuento || 0), 0),
-    ahorroEsteMes: beneficiosUsados
-      .filter(uso => {
-        const fecha = uso.fechaUso.toDate();
-        const ahora = new Date();
-        return fecha.getMonth() === ahora.getMonth() && fecha.getFullYear() === ahora.getFullYear();
-      })
-      .reduce((total, uso) => total + (uso.montoDescuento || 0), 0)
-  };
 
   return {
     // Estados
@@ -459,7 +527,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
     error,
     refreshing,
 
-    // Datos derivados
+    // Datos derivados memoizados
     beneficiosActivos,
     beneficiosInactivos,
     beneficiosVencidos,
@@ -484,7 +552,7 @@ export const useBeneficios = (options: UseBeneficiosOptions = {}) => {
   };
 };
 
-// Hook especializado para socios - MEJORADO
+// Hook especializado para socios optimizado
 export const useBeneficiosSocio = () => {
   return useBeneficios({
     autoLoad: true,
@@ -493,9 +561,8 @@ export const useBeneficiosSocio = () => {
   });
 };
 
-// Hook especializado para comercios
+// Hook especializado para comercios optimizado
 export const useBeneficiosComercios = () => {
-  
   return useBeneficios({
     autoLoad: true,
     useRealtime: true,
@@ -503,7 +570,7 @@ export const useBeneficiosComercios = () => {
   });
 };
 
-// Hook especializado para asociaciones
+// Hook especializado para asociaciones optimizado
 export const useBeneficiosAsociacion = () => {
   return useBeneficios({
     autoLoad: true,

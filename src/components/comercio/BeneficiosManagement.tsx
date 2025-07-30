@@ -55,8 +55,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { z } from 'zod';
 
-
-
 // Schema for form validation
 const beneficioSchema = z.object({
   titulo: z
@@ -191,6 +189,11 @@ export const BeneficiosManagement: React.FC = () => {
   });
 
   const selectedTipo = watch('tipo');
+
+  // Función para manejar la creación de beneficios (sin console.log problemático)
+  const handleCreateBeneficioClick = () => {
+    handleOpenDialog();
+  };
 
   const handleOpenDialog = (beneficio?: Beneficio) => {
     if (beneficio) {
@@ -365,7 +368,7 @@ export const BeneficiosManagement: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
-          onClick={() => handleOpenDialog()}
+          onClick={handleCreateBeneficioClick}
           sx={{
             bgcolor: '#06b6d4',
             '&:hover': { bgcolor: '#0891b2' },
@@ -585,7 +588,7 @@ export const BeneficiosManagement: React.FC = () => {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => handleOpenDialog()}
+                onClick={handleCreateBeneficioClick}
                 sx={{
                   bgcolor: '#06b6d4',
                   '&:hover': { bgcolor: '#0891b2' },

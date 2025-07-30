@@ -1,70 +1,88 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import React, { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/hooks/useAuth';
-import { ToastProvider } from '@/components/providers/ToastProvider';
+import { notificationInitService } from '@/lib/notification-init';
 
 interface ClientLayoutProps {
   children: React.ReactNode;
 }
 
-// Componente de loading global
-const GlobalLoading = () => (
-  <div className="min-h-screen bg-gradient-to-br from-sky-50/50 via-white to-celestial-50/30 flex items-center justify-center">
-    <div className="text-center">
-      <div className="relative mb-4">
-        <div className="w-16 h-16 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mx-auto" />
-      </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">
-        Cargando Fidelya
-      </h2>
-      <p className="text-gray-600">
-        Preparando la aplicación...
-      </p>
-    </div>
-  </div>
-);
-
-export function ClientLayout({ children }: ClientLayoutProps) {
-  // Initialize any client-side configurations
+export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
   useEffect(() => {
-    // Set up any global client configurations here
-    console.log('🚀 Fidelya Client initialized');
+    // Initialize notification system on client side
+    const initializeNotifications = async () => {
+      try {
+        await notificationInitService.initialize({
+          enableBrowserNotifications: true,
+          enableSounds: true,
+          queueProcessingInterval: 15000,
+          maxRetries: 3,
+        });
+      } catch (error) {
+        console.error('Failed to initialize notification system:', error);
+      }
+    };
+
+    initializeNotifications();
+
+    // Cleanup on unmount
+    return () => {
+      notificationInitService.shutdown();
+    };
   }, []);
 
   return (
     <AuthProvider>
-      <ToastProvider />
-      <Suspense fallback={<GlobalLoading />}>
-        {children}
-      </Suspense>
+      {children}
       <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#363636',
-            color: '#fff',
+            background: '#ffffff',
+            color: '#1f2937',
+            border: '1px solid #e5e7eb',
             borderRadius: '12px',
-            padding: '16px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
             fontSize: '14px',
             fontWeight: '500',
+            padding: '16px',
+            maxWidth: '400px',
           },
           success: {
             iconTheme: {
               primary: '#10b981',
-              secondary: '#fff',
+              secondary: '#ffffff',
+            },
+            style: {
+              border: '1px solid #d1fae5',
+              background: '#f0fdf4',
             },
           },
           error: {
             iconTheme: {
               primary: '#ef4444',
-              secondary: '#fff',
+              secondary: '#ffffff',
+            },
+            style: {
+              border: '1px solid #fecaca',
+              background: '#fef2f2',
+            },
+          },
+          loading: {
+            iconTheme: {
+              primary: '#6366f1',
+              secondary: '#ffffff',
+            },
+            style: {
+              border: '1px solid #c7d2fe',
+              background: '#f0f4ff',
             },
           },
         }}
       />
     </AuthProvider>
   );
-}
+};

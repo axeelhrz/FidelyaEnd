@@ -1,652 +1,462 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X,
-  User,
-  Mail,
-  Phone,
-  CreditCard,
+import { z } from 'zod';
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  CreditCard, 
+  MapPin, 
   Calendar,
-  Hash,
-  Shield,
-  Save,
-  UserPlus,
-  CheckCircle2,
-  AlertCircle,
-  ArrowRight,
-  ArrowLeft,
-  Lock,
   Eye,
   EyeOff,
-  Key
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  AlertCircle,
+  Loader2,
+  Lock,
+  Shield,
+  Save
 } from 'lucide-react';
-import { socioSchema } from '@/lib/validations/socio';
-import { z } from 'zod';
-import { Socio } from '@/types/socio';
+import { Socio, SocioFormData } from '@/types/socio';
+import { Timestamp } from 'firebase/firestore';
 
-type SocioFormData = z.infer<typeof socioSchema>;
+// Esquema de validación para creación (más estricto)
+const createSocioSchema = z.object({
+  nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+  email: z.string().email('Email inválido'),
+  estado: z.enum(['activo', 'inactivo', 'suspendido', 'pendiente', 'vencido']),
+  telefono: z.string().optional(),
+  dni: z.string().optional(),
+  direccion: z.string().optional(),
+  fechaNacimiento: z.string().optional(),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+  if (data.password && data.confirmPassword) {
+    return data.password === data.confirmPassword;
+  }
+  return true;
+}, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmPassword'],
+});
+
+// Esquema de validación para edición (más flexible)
+const editSocioSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  email: z.string().email('Email inválido').optional(),
+  estado: z.enum(['activo', 'inactivo', 'suspendido', 'pendiente', 'vencido']).optional(),
+  telefono: z.string().optional(),
+  dni: z.string().optional(),
+  direccion: z.string().optional(),
+  fechaNacimiento: z.string().optional(),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+  if (data.password && data.confirmPassword) {
+    return data.password === data.confirmPassword;
+  }
+  return true;
+}, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmPassword'],
+});
+
+type SocioFormInputs = z.infer<typeof createSocioSchema>;
+type EditSocioFormInputs = z.infer<typeof editSocioSchema>;
+
+// Configuración de pasos del formulario
+const FORM_STEPS = [
+  {
+    id: 'personal',
+    title: 'Información Personal',
+    subtitle: 'Datos básicos del socio',
+    icon: User,
+    color: 'from-blue-500 to-cyan-500',
+    fields: ['nombre', 'email', 'dni', 'fechaNacimiento']
+  },
+  {
+    id: 'contact',
+    title: 'Contacto y Ubicación',
+    subtitle: 'Información de contacto',
+    icon: Phone,
+    color: 'from-green-500 to-emerald-500',
+    fields: ['telefono', 'direccion', 'estado']
+  },
+  {
+    id: 'access',
+    title: 'Acceso y Seguridad',
+    subtitle: 'Credenciales de acceso',
+    icon: Lock,
+    color: 'from-orange-500 to-red-500',
+    fields: ['password', 'confirmPassword']
+  }
+];
+
+// Componente de campo de formulario simple
+interface SimpleFormFieldProps {
+  field: {
+    name: string;
+    label: string;
+    type: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    placeholder?: string;
+    options?: { value: string; label: string }[];
+  };
+  register: ReturnType<typeof useForm>['register'];
+  error?: { message?: string };
+  watch: (name: string) => string;
+  showPassword: boolean;
+  onTogglePassword: () => void;
+  isEditing?: boolean;
+}
+
+const SimpleFormField = React.memo(({
+  field,
+  register,
+  error,
+  watch,
+  showPassword,
+  onTogglePassword,
+}: SimpleFormFieldProps) => {
+  const fieldValue = watch(field.name);
+  const hasError = !!error;
+  const hasValue = fieldValue && fieldValue.length > 0;
+  const isValid = hasValue && !hasError;
+
+  const getFieldIcon = () => {
+    if (hasError) return <AlertCircle className="w-4 h-4 text-red-500" />;
+    if (isValid) return <Check className="w-4 h-4 text-green-500" />;
+    return field.icon ? <field.icon className="w-4 h-4 text-gray-400" /> : null;
+  };
+
+  const getFieldClasses = () => {
+    const baseClasses = "w-full pl-10 pr-4 py-3 border-2 rounded-xl transition-colors duration-100 bg-white";
+    
+    if (hasError) {
+      return `${baseClasses} border-red-300 focus:border-red-500`;
+    }
+    if (isValid) {
+      return `${baseClasses} border-green-300 focus:border-green-500`;
+    }
+    return `${baseClasses} border-gray-200 focus:border-blue-500`;
+  };
+
+  if (field.type === 'select') {
+    return (
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          {field.label}
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            {getFieldIcon()}
+          </div>
+          <select
+            {...register(field.name)}
+            className={getFieldClasses()}
+          >
+            <option value="">Seleccionar...</option>
+            {field.options?.map((option: { value: string; label: string }) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {error && (
+          <p className="text-sm text-red-600 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {error.message}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">
+        {field.label}
+      </label>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          {getFieldIcon()}
+        </div>
+        <input
+          {...register(field.name, { 
+            valueAsNumber: field.type === 'number' ? true : false 
+          })}
+          type={field.type === 'password' && showPassword ? 'text' : field.type}
+          placeholder={field.placeholder}
+          className={getFieldClasses()}
+        />
+        {field.type === 'password' && (
+          <button
+            type="button"
+            onClick={onTogglePassword}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+          >
+            {showPassword ? (
+              <EyeOff className="w-4 h-4 text-gray-400" />
+            ) : (
+              <Eye className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+        )}
+      </div>
+      {error && (
+        <p className="text-sm text-red-600 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />
+          {error.message}
+        </p>
+      )}
+    </div>
+  );
+});
+
+SimpleFormField.displayName = 'SimpleFormField';
 
 interface SocioDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: SocioFormData) => Promise<void>;
   socio?: Socio | null;
+  loading?: boolean;
 }
-
-const STEPS = [
-  {
-    id: 1,
-    title: 'Información Personal',
-    description: 'Datos básicos del socio',
-    icon: User,
-    color: 'bg-blue-500'
-  },
-  {
-    id: 2,
-    title: 'Acceso al Sistema',
-    description: 'Credenciales de acceso',
-    icon: Key,
-    color: 'bg-purple-500'
-  },
-  {
-    id: 3,
-    title: 'Configuración',
-    description: 'Estado y configuración final',
-    icon: Shield,
-    color: 'bg-emerald-500'
-  }
-];
 
 export const SocioDialog: React.FC<SocioDialogProps> = ({
   open,
   onClose,
   onSave,
   socio,
+  loading = false
 }) => {
-  const isEditing = !!socio;
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const isEditing = !!socio;
+  const currentStepData = FORM_STEPS[currentStep];
+
+  // Asegurar que el componente esté montado
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Función para convertir Date/Timestamp a string para input date
+  const formatDateForInput = useCallback((date: Date | Timestamp | undefined): string => {
+    if (!date) return '';
+    
+    let jsDate: Date;
+    if (date instanceof Timestamp) {
+      jsDate = date.toDate();
+    } else if (date instanceof Date) {
+      jsDate = date;
+    } else {
+      return '';
+    }
+    
+    return jsDate.toISOString().split('T')[0];
+  }, []);
+  type SocioFormType = SocioFormInputs | EditSocioFormInputs;
 
   const {
     register,
     handleSubmit,
     reset,
+    formState: { errors },
     watch,
     trigger,
-    formState: { errors, isSubmitting, isValid, touchedFields },
-  } = useForm<SocioFormData>({
-    resolver: zodResolver(socioSchema),
+    getValues
+  } = useForm<SocioFormType>({
+    resolver: isEditing
+      ? (zodResolver(editSocioSchema) as import('react-hook-form').Resolver<SocioFormType>)
+      : (zodResolver(createSocioSchema) as import('react-hook-form').Resolver<SocioFormType>),
     mode: 'onChange',
-    defaultValues: {
-      nombre: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      estado: 'activo',
-      telefono: '',
-      dni: '',
-      numeroSocio: '',
-    }
+    defaultValues: isEditing
+      ? {
+          nombre: socio?.nombre ?? '',
+          email: socio?.email ?? '',
+          estado: socio?.estado ?? 'activo',
+          telefono: socio?.telefono ?? '',
+          dni: socio?.dni ?? '',
+          direccion: socio?.direccion ?? '',
+          fechaNacimiento: socio?.fechaNacimiento
+            ? formatDateForInput(socio.fechaNacimiento)
+            : '',
+        }
+      : {
+          nombre: '',
+          email: '',
+          estado: 'activo',
+          telefono: '',
+          dni: '',
+          direccion: '',
+          fechaNacimiento: '',
+        }
   });
 
-  const watchedFields = watch();
+  // Validación debounced
+  // const debouncedTrigger = useDebounce(trigger, 300);
 
+  // Resetear formulario
   useEffect(() => {
     if (open) {
-      setCurrentStep(1);
       if (socio) {
-        // Convert Timestamp to Date if needed
-        function toDateOrUndefined(value: unknown): Date | undefined {
-          if (!value) return undefined;
-          if (value instanceof Date) return value;
-          if (typeof value === 'object' && value !== null && typeof (value as { toDate?: () => Date }).toDate === 'function') {
-            return (value as { toDate: () => Date }).toDate();
-          }
-          if (typeof value === 'string' || typeof value === 'number') {
-            const d = new Date(value);
-            return isNaN(d.getTime()) ? undefined : d;
-          }
-          return undefined;
-        }
-        
-        const fechaNacimiento = toDateOrUndefined(socio.fechaNacimiento) ?? new Date();
-        const fechaVencimiento = toDateOrUndefined(socio.fechaVencimiento);
-        
         reset({
-          nombre: socio.nombre,
-          email: socio.email,
-          password: '', // No pre-fill password for security
-          confirmPassword: '',
-          estado: socio.estado === 'activo' || socio.estado === 'vencido' || socio.estado === 'inactivo' || socio.estado === 'suspendido' || socio.estado === 'pendiente' 
-            ? socio.estado 
-            : 'activo',
+          nombre: socio.nombre || '',
+          email: socio.email || '',
+          estado: socio.estado || 'activo',
           telefono: socio.telefono || '',
           dni: socio.dni || '',
-          fechaNacimiento,
-          numeroSocio: socio.numeroSocio || '',
-          fechaVencimiento,
+          direccion: socio.direccion || '',
+          fechaNacimiento: formatDateForInput(socio.fechaNacimiento),
         });
       } else {
         reset({
           nombre: '',
           email: '',
-          password: '',
-          confirmPassword: '',
           estado: 'activo',
           telefono: '',
           dni: '',
-          fechaNacimiento: new Date(),
-          numeroSocio: '',
-          fechaVencimiento: undefined,
+          direccion: '',
+          fechaNacimiento: '',
         });
       }
+      setCurrentStep(0);
     }
-  }, [open, socio, reset]);
+  }, [open, socio, reset, formatDateForInput]);
 
-  const onSubmit = async (data: SocioFormData) => {
+  // Navegación entre pasos
+  const nextStep = useCallback(async () => {
+    // En modo edición, permitir navegar sin validación estricta
+    if (isEditing) {
+      if (currentStep < FORM_STEPS.length - 1) {
+        setCurrentStep(prev => prev + 1);
+      }
+      return;
+    }
+
+    // En modo creación, validar antes de continuar
+    const currentFields = FORM_STEPS[currentStep].fields as Array<
+      "nombre" | "email" | "estado" | "telefono" | "dni" | "direccion" | "fechaNacimiento" | "password" | "confirmPassword"
+    >;
+    const isValid = await trigger(currentFields);
+    
+    if (isValid && currentStep < FORM_STEPS.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    }
+  }, [currentStep, trigger, isEditing]);
+
+  const prevStep = useCallback(() => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
+  }, [currentStep]);
+
+  const goToStep = useCallback((stepIndex: number) => {
+    setCurrentStep(stepIndex);
+  }, []);
+
+  // Función para guardar cambios en modo edición sin validación completa
+  const handleQuickSave = useCallback(async () => {
+    if (!isEditing) return;
+
     try {
-      await onSave(data);
+      setIsSubmitting(true);
+      
+      const currentValues = getValues();
+      const formData: SocioFormData = {
+        nombre: currentValues.nombre || socio?.nombre || '',
+        email: currentValues.email || socio?.email || '',
+        estado: currentValues.estado || socio?.estado || 'activo',
+        telefono: currentValues.telefono || '',
+        dni: currentValues.dni || '',
+        direccion: currentValues.direccion || '',
+        fechaNacimiento: currentValues.fechaNacimiento ? new Date(currentValues.fechaNacimiento) : undefined,
+        password: currentValues.password || '',
+      };
+
+      await onSave(formData);
       onClose();
     } catch (error) {
-      console.error('Error saving socio:', error);
+      console.error('Error al guardar socio:', error);
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [isEditing, getValues, socio, onSave, onClose]);
 
-  const handleClose = () => {
-    if (!isSubmitting) {
+  // Envío del formulario completo
+  const onSubmit = useCallback(async (
+    data: SocioFormInputs | EditSocioFormInputs
+  ) => {
+    try {
+      setIsSubmitting(true);
+
+      const formData: SocioFormData = {
+        nombre: data.nombre || '',
+        email: data.email || '',
+        estado: data.estado || 'activo',
+        telefono: data.telefono || '',
+        dni: data.dni || '',
+        direccion: data.direccion || '',
+        fechaNacimiento: data.fechaNacimiento ? new Date(data.fechaNacimiento) : undefined,
+        password: data.password || '',
+      };
+
+      await onSave(formData);
       onClose();
+    } catch (error) {
+      console.error('Error al guardar socio:', error);
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [onSave, onClose]);
 
-  const nextStep = async () => {
-    const fieldsToValidate = getFieldsForStep(currentStep);
-    const isStepValid = await trigger(fieldsToValidate);
-    
-    if (isStepValid && currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
+  // Configuración de campos para cada paso
+  const getStepFields = useMemo(() => {
+    const fieldConfigs = {
+      nombre: { name: 'nombre', label: 'Nombre completo', type: 'text', icon: User, placeholder: 'Ingrese el nombre completo' },
+      email: { name: 'email', label: 'Email', type: 'email', icon: Mail, placeholder: 'correo@ejemplo.com' },
+      dni: { name: 'dni', label: 'DNI', type: 'text', icon: CreditCard, placeholder: '12345678' },
+      fechaNacimiento: { name: 'fechaNacimiento', label: 'Fecha de nacimiento', type: 'date', icon: Calendar },
+      telefono: { name: 'telefono', label: 'Teléfono', type: 'tel', icon: Phone, placeholder: '+54 9 11 1234-5678' },
+      direccion: { name: 'direccion', label: 'Dirección', type: 'text', icon: MapPin, placeholder: 'Calle 123, Ciudad' },
+      estado: { 
+        name: 'estado', 
+        label: 'Estado', 
+        type: 'select', 
+        icon: Shield,
+        options: [
+          { value: 'activo', label: 'Activo' },
+          { value: 'inactivo', label: 'Inactivo' },
+          { value: 'suspendido', label: 'Suspendido' },
+          { value: 'pendiente', label: 'Pendiente' },
+          { value: 'vencido', label: 'Vencido' }
+        ]
+      },
+      password: { name: 'password', label: 'Contraseña', type: 'password', icon: Lock, placeholder: 'Mínimo 6 caracteres' },
+      confirmPassword: { name: 'confirmPassword', label: 'Confirmar contraseña', type: 'password', icon: Lock, placeholder: 'Repita la contraseña' },
+    };
 
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+    return currentStepData.fields.map(fieldName => fieldConfigs[fieldName as keyof typeof fieldConfigs]);
+  }, [currentStepData]);
 
-  const getFieldsForStep = (step: number): (keyof SocioFormData)[] => {
-    switch (step) {
-      case 1:
-        return ['nombre', 'email', 'dni', 'telefono', 'fechaNacimiento'];
-      case 2:
-        return ['password', 'confirmPassword'];
-      case 3:
-        return ['estado', 'numeroSocio', 'fechaVencimiento'];
-      default:
-        return [];
-    }
-  };
+  if (!mounted) return null;
 
-  const getFieldValidationState = (fieldName: keyof SocioFormData) => {
-    const hasError = !!errors[fieldName];
-    const isTouched = !!touchedFields[fieldName];
-    const hasValue = !!watchedFields[fieldName];
-    
-    if (hasError) return 'error';
-    if (isTouched && hasValue) return 'success';
-    return 'default';
-  };
-
-  const getFieldIcon = (state: string) => {
-    switch (state) {
-      case 'success':
-        return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-      case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const getFieldClasses = (state: string) => {
-    const baseClasses = "w-full pl-12 pr-12 py-3.5 border-2 rounded-xl transition-all duration-200 placeholder-gray-400 focus:outline-none focus:ring-0";
-    
-    switch (state) {
-      case 'success':
-        return `${baseClasses} border-emerald-200 bg-emerald-50/50 focus:border-emerald-400 focus:bg-emerald-50`;
-      case 'error':
-        return `${baseClasses} border-red-200 bg-red-50/50 focus:border-red-400 focus:bg-red-50`;
-      default:
-        return `${baseClasses} border-gray-200 bg-white focus:border-indigo-400 focus:bg-indigo-50/30 hover:border-gray-300`;
-    }
-  };
-
-  const statusOptions = [
-    { value: 'activo', label: 'Activo', color: 'bg-emerald-500', description: 'Socio con acceso completo' },
-    { value: 'pendiente', label: 'Pendiente', color: 'bg-amber-500', description: 'Esperando activación' },
-    { value: 'inactivo', label: 'Inactivo', color: 'bg-gray-500', description: 'Sin acceso temporal' },
-    { value: 'suspendido', label: 'Suspendido', color: 'bg-red-500', description: 'Acceso bloqueado' },
-    { value: 'vencido', label: 'Vencido', color: 'bg-orange-500', description: 'Membresía expirada' },
-  ];
-
-  const isStepValid = (step: number) => {
-    const fieldsToCheck = getFieldsForStep(step);
-    return fieldsToCheck.every(field => !errors[field] && watchedFields[field]);
-  };
-
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <motion.div
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            {/* Nombre */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Nombre completo <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('nombre')}
-                  type="text"
-                  placeholder="Ingresa el nombre completo"
-                  className={getFieldClasses(getFieldValidationState('nombre'))}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('nombre'))}
-                </div>
-              </div>
-              {errors.nombre && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.nombre.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Correo electrónico <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('email')}
-                  type="email"
-                  placeholder="socio@ejemplo.com"
-                  className={getFieldClasses(getFieldValidationState('email'))}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('email'))}
-                </div>
-              </div>
-              {errors.email && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.email.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* DNI */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  DNI / Documento
-                </label>
-                <div className="relative">
-                  <CreditCard className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('dni')}
-                    type="text"
-                    placeholder="Número de documento"
-                    className={getFieldClasses(getFieldValidationState('dni'))}
-                  />
-                  <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                    {getFieldIcon(getFieldValidationState('dni'))}
-                  </div>
-                </div>
-                {errors.dni && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-sm text-red-600 flex items-center space-x-1"
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.dni.message}</span>
-                  </motion.p>
-                )}
-              </div>
-
-              {/* Teléfono */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Teléfono
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('telefono')}
-                    type="text"
-                    placeholder="+54 11 1234-5678"
-                    className={getFieldClasses(getFieldValidationState('telefono'))}
-                  />
-                  <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                    {getFieldIcon(getFieldValidationState('telefono'))}
-                  </div>
-                </div>
-                {errors.telefono && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-sm text-red-600 flex items-center space-x-1"
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.telefono.message}</span>
-                  </motion.p>
-                )}
-              </div>
-            </div>
-
-            {/* Fecha de Nacimiento */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Fecha de nacimiento
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('fechaNacimiento', {
-                    valueAsDate: true,
-                  })}
-                  type="date"
-                  className={getFieldClasses(getFieldValidationState('fechaNacimiento'))}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('fechaNacimiento'))}
-                </div>
-              </div>
-              {errors.fechaNacimiento && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.fechaNacimiento.message}</span>
-                </motion.p>
-              )}
-            </div>
-          </motion.div>
-        );
-
-      case 2:
-        return (
-          <motion.div
-            key="step2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Key className="w-8 h-8 text-purple-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Credenciales de Acceso</h3>
-              <p className="text-gray-600 text-sm">
-                Estas credenciales permitirán al socio acceder a su cuenta personal
-              </p>
-            </div>
-
-            {/* Contraseña */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Contraseña <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('password')}
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Mínimo 6 caracteres"
-                  className={getFieldClasses(getFieldValidationState('password'))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.password && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.password.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Confirmar Contraseña */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Confirmar contraseña <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('confirmPassword')}
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Repite la contraseña"
-                  className={getFieldClasses(getFieldValidationState('confirmPassword'))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.confirmPassword && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.confirmPassword.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Password Strength Indicator */}
-            {watchedFields.password && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 bg-gray-50 rounded-xl border border-gray-200"
-              >
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Seguridad de la contraseña</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${watchedFields.password.length >= 6 ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
-                    <span className={`text-xs ${watchedFields.password.length >= 6 ? 'text-emerald-600' : 'text-gray-500'}`}>
-                      Mínimo 6 caracteres
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${/[A-Z]/.test(watchedFields.password) ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
-                    <span className={`text-xs ${/[A-Z]/.test(watchedFields.password) ? 'text-emerald-600' : 'text-gray-500'}`}>
-                      Al menos una mayúscula
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${/[0-9]/.test(watchedFields.password) ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
-                    <span className={`text-xs ${/[0-9]/.test(watchedFields.password) ? 'text-emerald-600' : 'text-gray-500'}`}>
-                      Al menos un número
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        );
-
-      case 3:
-        return (
-          <motion.div
-            key="step3"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            {/* Estado */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Estado del socio <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Shield className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <select
-                  {...register('estado')}
-                  className={getFieldClasses(getFieldValidationState('estado'))}
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label} - {option.description}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('estado'))}
-                </div>
-              </div>
-              {errors.estado && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.estado.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Número de Socio */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Número de socio
-              </label>
-              <div className="relative">
-                <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('numeroSocio')}
-                  type="text"
-                  placeholder="Se genera automáticamente si se deja vacío"
-                  className={getFieldClasses(getFieldValidationState('numeroSocio'))}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('numeroSocio'))}
-                </div>
-              </div>
-              {errors.numeroSocio && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.numeroSocio.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Fecha de Vencimiento */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Fecha de vencimiento
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  {...register('fechaVencimiento', {
-                    valueAsDate: true,
-                  })}
-                  type="date"
-                  className={getFieldClasses(getFieldValidationState('fechaVencimiento'))}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  {getFieldIcon(getFieldValidationState('fechaVencimiento'))}
-                </div>
-              </div>
-              {errors.fechaVencimiento && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-600 flex items-center space-x-1"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{errors.fechaVencimiento.message}</span>
-                </motion.p>
-              )}
-            </div>
-
-            {/* Status Preview */}
-            {watchedFields.estado && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 bg-gray-50 rounded-xl border border-gray-200"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className={`w-3 h-3 rounded-full ${statusOptions.find(s => s.value === watchedFields.estado)?.color}`}></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {statusOptions.find(s => s.value === watchedFields.estado)?.label}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {statusOptions.find(s => s.value === watchedFields.estado)?.description}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
+  const modalContent = (
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -655,176 +465,196 @@ export const SocioDialog: React.FC<SocioDialogProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={handleClose}
+            transition={{ duration: 0.1 }}
+            className="fixed inset-0 bg-black/50"
+            onClick={onClose}
           />
 
-          {/* Dialog Container */}
-          <div className="flex items-center justify-center min-h-screen p-4">
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: "spring", duration: 0.5 }}
-              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.1 }}
+              className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 px-8 py-8">
-                <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.2, type: "spring" }}
-                      className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/30"
-                    >
-                      {isEditing ? (
-                        <User className="w-8 h-8 text-white" />
-                      ) : (
-                        <UserPlus className="w-8 h-8 text-white" />
-                      )}
-                    </motion.div>
+              <div className={`relative px-6 py-4 bg-gradient-to-r ${currentStepData.color}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-white/20 rounded-lg">
+                      <currentStepData.icon className="w-6 h-6 text-white" />
+                    </div>
                     <div>
-                      <motion.h2
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-2xl font-bold text-white"
-                      >
+                      <h2 className="text-xl font-bold text-white">
                         {isEditing ? 'Editar Socio' : 'Nuevo Socio'}
-                      </motion.h2>
-                      <motion.p
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-white/80 text-sm mt-1"
-                      >
-                        Paso {currentStep} de {STEPS.length}: {STEPS[currentStep - 1]?.description}
-                      </motion.p>
+                      </h2>
+                      <p className="text-white/80 text-sm">
+                        {currentStepData.title} - {currentStepData.subtitle}
+                      </p>
                     </div>
                   </div>
-                  
-                  <motion.button
-                    initial={{ opacity: 0, rotate: -90 }}
-                    animate={{ opacity: 1, rotate: 0 }}
-                    transition={{ delay: 0.3 }}
-                    onClick={handleClose}
-                    disabled={isSubmitting}
-                    className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30 text-white hover:bg-white/30 transition-all duration-200 disabled:opacity-50"
-                  >
-                    <X className="w-5 h-5" />
-                  </motion.button>
-                </div>
-                
-                {/* Decorative elements */}
-                <div className="absolute top-4 right-20 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-                <div className="absolute bottom-4 left-20 w-16 h-16 bg-white/10 rounded-full blur-xl"></div>
-              </div>
-
-              {/* Step Indicator */}
-              <div className="px-8 py-6 bg-gray-50 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  {STEPS.map((step, index) => (
-                    <div key={step.id} className="flex items-center">
-                      <div className="flex items-center">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                          currentStep === step.id
-                            ? `${step.color} text-white shadow-lg`
-                            : currentStep > step.id
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-gray-200 text-gray-500'
-                        }`}>
-                          {currentStep > step.id ? (
-                            <CheckCircle2 className="w-5 h-5" />
-                          ) : (
-                            <step.icon className="w-5 h-5" />
-                          )}
-                        </div>
-                        <div className="ml-3">
-                          <p className={`text-sm font-medium ${
-                            currentStep === step.id ? 'text-gray-900' : 'text-gray-500'
-                          }`}>
-                            {step.title}
-                          </p>
-                        </div>
-                      </div>
-                      {index < STEPS.length - 1 && (
-                        <div className={`w-12 h-0.5 mx-4 transition-all duration-200 ${
-                          currentStep > step.id ? 'bg-emerald-500' : 'bg-gray-200'
-                        }`} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleSubmit(onSubmit)} className="p-8">
-                <AnimatePresence mode="wait">
-                  {renderStepContent()}
-                </AnimatePresence>
-
-                {/* Actions */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="flex flex-col sm:flex-row gap-4 mt-8 pt-6 border-t border-gray-200"
-                >
-                  <div className="flex gap-4 flex-1">
-                    {currentStep > 1 && (
+                  <div className="flex items-center space-x-2">
+                    {/* Botón de guardado rápido para edición */}
+                    {isEditing && (
                       <button
                         type="button"
-                        onClick={prevStep}
-                        disabled={isSubmitting}
-                        className="flex items-center justify-center px-6 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 disabled:opacity-50"
+                        onClick={handleQuickSave}
+                        disabled={isSubmitting || loading}
+                        className="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors disabled:opacity-50"
+                        title="Guardar cambios actuales"
                       >
-                        <ArrowLeft className="w-5 h-5 mr-2" />
-                        Anterior
+                        {isSubmitting || loading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Save className="w-4 h-4" />
+                        )}
+                        <span className="hidden sm:inline">Guardar</span>
                       </button>
                     )}
+                    <button
+                      onClick={onClose}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Navegación por iconos */}
+                <div className="mt-4 flex justify-center space-x-4">
+                  {FORM_STEPS.map((step, index) => {
+                    const StepIcon = step.icon;
+                    const isActive = index === currentStep;
+                    const isCompleted = index < currentStep;
                     
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => goToStep(index)}
+                        className={`relative p-3 rounded-xl transition-all duration-100 ${
+                          isActive 
+                            ? 'bg-white/30 scale-110' 
+                            : isCompleted 
+                              ? 'bg-white/20 hover:bg-white/25' 
+                              : 'bg-white/10 hover:bg-white/15'
+                        }`}
+                      >
+                        <StepIcon className={`w-5 h-5 ${
+                          isActive || isCompleted ? 'text-white' : 'text-white/60'
+                        }`} />
+                        
+                        {/* Indicador de completado */}
+                        {isCompleted && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Content */}
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6">
+                <div key={currentStep} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {getStepFields.map((field) => (
+                      <div key={field.name} className={field.name === 'direccion' ? 'md:col-span-2' : ''}>
+                        <SimpleFormField
+                          field={field}
+                          register={register}
+                          error={errors[field.name as keyof typeof errors]}
+                          watch={watch}
+                          showPassword={field.name === 'password' ? showPassword : field.name === 'confirmPassword' ? showConfirmPassword : false}
+                          onTogglePassword={() => {
+                            if (field.name === 'password') setShowPassword(!showPassword);
+                            if (field.name === 'confirmPassword') setShowConfirmPassword(!showConfirmPassword);
+                          }}
+                          isEditing={isEditing}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    disabled={currentStep === 0}
+                    className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Anterior</span>
+                  </button>
+
+                  <div className="flex space-x-3">
                     <button
                       type="button"
-                      onClick={handleClose}
-                      disabled={isSubmitting}
-                      className="flex-1 px-6 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 disabled:opacity-50"
+                      onClick={onClose}
+                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       Cancelar
                     </button>
+
+                    {/* En modo edición, mostrar botón de guardado rápido también aquí */}
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={handleQuickSave}
+                        disabled={isSubmitting || loading}
+                        className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isSubmitting || loading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            <span>Guardar Cambios</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {currentStep < FORM_STEPS.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={nextStep}
+                        className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <span>Siguiente</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || loading}
+                        className="flex items-center space-x-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isSubmitting || loading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>{isEditing ? 'Actualizar' : 'Crear'} Socio</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
-                  
-                  {currentStep < STEPS.length ? (
-                    <button
-                      type="button"
-                      onClick={nextStep}
-                      disabled={!isStepValid(currentStep)}
-                      className="flex items-center justify-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                    >
-                      Siguiente
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || !isValid}
-                      className="flex items-center justify-center px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-5 h-5 mr-2" />
-                          {isEditing ? 'Actualizar' : 'Crear'} Socio
-                        </>
-                      )}
-                    </button>
-                  )}
-                </motion.div>
+                </div>
               </form>
             </motion.div>
           </div>
@@ -832,4 +662,6 @@ export const SocioDialog: React.FC<SocioDialogProps> = ({
       )}
     </AnimatePresence>
   );
+
+  return createPortal(modalContent, document.body);
 };

@@ -1,62 +1,136 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 interface UseSidebarNavigationOptions {
+  autoCloseOnMobile?: boolean;
+  persistState?: boolean;
   onMenuClick?: (section: string) => void;
   debounceMs?: number;
 }
 
 export const useSidebarNavigation = (options: UseSidebarNavigationOptions = {}) => {
-  const { onMenuClick, debounceMs = 100 } = options;
+  const { 
+    autoCloseOnMobile = true, 
+    persistState = true, 
+    onMenuClick,
+    debounceMs = 150 
+  } = options;
+  
   const router = useRouter();
   const pathname = usePathname();
-  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastNavigationRef = useRef<string>('');
-
-  const navigate = useCallback((route: string, itemId: string) => {
-    // Clear any pending navigation
-    if (navigationTimeoutRef.current) {
-      clearTimeout(navigationTimeoutRef.current);
-    }
-
-    // Prevent duplicate navigation
-    if (pathname === route || lastNavigationRef.current === route) {
-      return;
-    }
-
-    // Debounce navigation to prevent rapid clicks
-    navigationTimeoutRef.current = setTimeout(() => {
-      try {
-        lastNavigationRef.current = route;
-        router.push(route);
-        
-        // Call onMenuClick for any additional handling
-        if (onMenuClick) {
-          onMenuClick(itemId);
-        }
-      } catch (error) {
-        console.error('Navigation error:', error);
+  
+  // Estado persistente del sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    
+    if (persistState) {
+      const saved = localStorage.getItem('sidebar-open');
+      if (saved !== null) {
+        return JSON.parse(saved);
       }
-    }, debounceMs);
-  }, [router, pathname, onMenuClick, debounceMs]);
+    }
+    
+    // Default: abierto en desktop, cerrado en mobile
+    return window.innerWidth >= 1024;
+  });
 
-  const isCurrentRoute = useCallback((route: string) => {
+  const [isMobile, setIsMobile] = useState(false);
+  const lastPathnameRef = useRef(pathname);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detectar cambios de tamaño de pantalla
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      
+      // Auto-ajustar sidebar según el tamaño de pantalla
+      if (!mobile && !sidebarOpen) {
+        setSidebarOpen(true);
+      } else if (mobile && sidebarOpen && autoCloseOnMobile) {
+        setSidebarOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen, autoCloseOnMobile]);
+
+  // Persistir estado del sidebar
+  useEffect(() => {
+    if (persistState && typeof window !== 'undefined') {
+      localStorage.setItem('sidebar-open', JSON.stringify(sidebarOpen));
+    }
+  }, [sidebarOpen, persistState]);
+
+  // Toggle del sidebar
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((prev: boolean) => !prev);
+  }, []);
+
+  // Navegación optimizada con debounce
+  const navigateTo = useCallback((route: string, section?: string) => {
+    // Limpiar timeout anterior
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    // Aplicar debounce
+    debounceTimeoutRef.current = setTimeout(() => {
+      // Solo navegar si la ruta es diferente
+      if (pathname !== route) {
+        router.push(route);
+      }
+      
+      // Llamar al callback de menú si existe
+      if (onMenuClick && section) {
+        onMenuClick(section);
+      }
+      
+      // Auto-cerrar en mobile después de navegación
+      if (isMobile && autoCloseOnMobile) {
+        setSidebarOpen(false);
+      }
+      
+      lastPathnameRef.current = route;
+    }, debounceMs);
+  }, [router, pathname, isMobile, autoCloseOnMobile, onMenuClick, debounceMs]);
+
+  // Alias para compatibilidad
+  const navigate = navigateTo;
+
+  // Verificar si una ruta está activa
+  const isActiveRoute = useCallback((route: string) => {
     return pathname === route;
   }, [pathname]);
 
-  // Cleanup on unmount
-  const cleanup = useCallback(() => {
-    if (navigationTimeoutRef.current) {
-      clearTimeout(navigationTimeoutRef.current);
+  // Cerrar sidebar en mobile al cambiar de ruta
+  useEffect(() => {
+    if (pathname !== lastPathnameRef.current && isMobile && autoCloseOnMobile) {
+      setSidebarOpen(false);
     }
+    lastPathnameRef.current = pathname;
+  }, [pathname, isMobile, autoCloseOnMobile]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
   }, []);
 
   return {
-    navigate,
-    isCurrentRoute,
-    cleanup,
-    currentPath: pathname
+    sidebarOpen,
+    isMobile,
+    toggleSidebar,
+    navigateTo,
+    navigate, // Alias para compatibilidad
+    isActiveRoute,
+    setSidebarOpen
   };
 };

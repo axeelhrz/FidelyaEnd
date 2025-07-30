@@ -31,7 +31,6 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  TrendingUp,
   Activity,
   Zap,
   Grid3X3,
@@ -62,47 +61,37 @@ interface ComercioConBeneficios extends ComercioDisponible {
   beneficiosActivosReales?: number;
 }
 
-// Modern Stats Card Component with improved responsiveness
+// Modern Stats Card Component - REMOVED ALL PERCENTAGES AND TRENDS
 const ModernStatsCard: React.FC<{
   title: string;
   value: number;
   icon: React.ReactNode;
   color: 'blue' | 'green' | 'orange' | 'purple';
-  trend?: number;
-  percentage?: number;
-}> = ({ title, value, icon, color, trend, percentage }) => {
+}> = ({ title, value, icon, color }) => {
   const colorClasses = {
     blue: {
       bg: 'from-blue-500 to-blue-600',
       iconBg: 'bg-blue-100',
       iconColor: 'text-blue-600',
-      textColor: 'text-blue-600',
-      progressBg: 'bg-blue-200',
-      progressFill: 'bg-blue-500'
+      textColor: 'text-blue-600'
     },
     green: {
       bg: 'from-emerald-500 to-emerald-600',
       iconBg: 'bg-emerald-100',
       iconColor: 'text-emerald-600',
-      textColor: 'text-emerald-600',
-      progressBg: 'bg-emerald-200',
-      progressFill: 'bg-emerald-500'
+      textColor: 'text-emerald-600'
     },
     orange: {
       bg: 'from-orange-500 to-orange-600',
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-600',
-      textColor: 'text-orange-600',
-      progressBg: 'bg-orange-200',
-      progressFill: 'bg-orange-500'
+      textColor: 'text-orange-600'
     },
     purple: {
       bg: 'from-purple-500 to-purple-600',
       iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
-      textColor: 'text-purple-600',
-      progressBg: 'bg-purple-200',
-      progressFill: 'bg-purple-500'
+      textColor: 'text-purple-600'
     }
   };
 
@@ -125,12 +114,6 @@ const ModernStatsCard: React.FC<{
               {icon}
             </div>
           </div>
-          {trend && (
-            <div className={`flex items-center space-x-1 ${trend > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              <TrendingUp className={`w-3 h-3 lg:w-4 lg:h-4 ${trend < 0 ? 'rotate-180' : ''}`} />
-              <span className="text-xs lg:text-sm font-semibold">{Math.abs(trend)}%</span>
-            </div>
-          )}
         </div>
         
         <div className="space-y-1 lg:space-y-2">
@@ -138,21 +121,6 @@ const ModernStatsCard: React.FC<{
           <p className={`text-xl lg:text-3xl font-bold ${classes.textColor}`}>
             {value.toLocaleString()}
           </p>
-          
-          {/* Progress bar for percentage */}
-          {percentage !== undefined && (
-            <div className="mt-2 lg:mt-3">
-              <div className={`w-full h-2 ${classes.progressBg} rounded-full overflow-hidden`}>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(percentage, 100)}%` }}
-                  transition={{ duration: 1, delay: 0.5 }}
-                  className={`h-full ${classes.progressFill} rounded-full`}
-                />
-              </div>
-              <p className="text-xs text-slate-500 mt-1">{percentage.toFixed(1)}% del total</p>
-            </div>
-          )}
         </div>
       </div>
       
@@ -524,23 +492,14 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
   // Obtener categorías únicas
   const categorias = Array.from(new Set(comerciosVinculados.map(c => c.categoria)));
 
-  // Calculate improved percentages
-  const calculatePercentages = () => {
-    const total = stats.totalComercios;
-    if (total === 0) return { activosPercentage: 0, inactivosPercentage: 0, suspendidosPercentage: 0 };
-    
-    const activos = stats.comerciosActivos;
-    const inactivos = comerciosVinculados.filter(c => c.estado === 'inactivo').length;
-    const suspendidos = comerciosVinculados.filter(c => c.estado === 'suspendido').length;
-    
-    return {
-      activosPercentage: (activos / total) * 100,
-      inactivosPercentage: (inactivos / total) * 100,
-      suspendidosPercentage: (suspendidos / total) * 100
-    };
+  // Calculate real stats based on actual data - NO TRENDS OR PERCENTAGES
+  const realStats = {
+    totalComercios: comerciosVinculados.length,
+    comerciosActivos: comerciosVinculados.filter(c => c.estado === 'activo').length,
+    comerciosInactivos: comerciosVinculados.filter(c => c.estado === 'inactivo').length,
+    comerciosSuspendidos: comerciosVinculados.filter(c => c.estado === 'suspendido').length,
+    categorias: Object.keys(stats.categorias).length
   };
-
-  const percentages = calculatePercentages();
 
   // Nueva función para manejar ver beneficios
   const handleViewBeneficios = (comercio: ComercioDisponible) => {
@@ -758,36 +717,31 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      {/* Modern Stats Cards with improved percentages */}
+      {/* Modern Stats Cards - NO TRENDS OR PERCENTAGES */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <ModernStatsCard
           title="Total Comercios"
-          value={stats.totalComercios}
+          value={realStats.totalComercios}
           icon={<Store className="w-5 h-5 lg:w-6 lg:h-6" />}
           color="blue"
-          trend={5}
         />
         <ModernStatsCard
           title="Comercios Activos"
-          value={stats.comerciosActivos}
+          value={realStats.comerciosActivos}
           icon={<Zap className="w-5 h-5 lg:w-6 lg:h-6" />}
           color="green"
-          trend={12}
-          percentage={percentages.activosPercentage}
         />
         <ModernStatsCard
           title="Comercios Inactivos"
-          value={comerciosVinculados.filter(c => c.estado === 'inactivo').length}
+          value={realStats.comerciosInactivos}
           icon={<PowerOff className="w-5 h-5 lg:w-6 lg:h-6" />}
           color="orange"
-          percentage={percentages.inactivosPercentage}
         />
         <ModernStatsCard
           title="Categorías"
-          value={Object.keys(stats.categorias).length}
+          value={realStats.categorias}
           icon={<Activity className="w-5 h-5 lg:w-6 lg:h-6" />}
           color="purple"
-          trend={3}
         />
       </div>
 
@@ -1257,14 +1211,108 @@ export const ComercioManagement: React.FC<ComercioManagementProps> = ({
                       <th className="px-3 lg:px-6 py-3 lg:py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                         Estado
                       </th>
-                      <th className="hidden sm:table-cell px-3 lg:px-6 py-3 lg:py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                        Beneficios
+                      <th className="hidden sm:table-cell px-3 lg:px-6 py-3 lg:py-4">
+                        <div className="max-w-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                              <Gift className="w-3 h-3 lg:w-4 lg:h-4 text-purple-500 mr-2" />
+                              <span className="text-xs lg:text-sm font-semibold text-slate-900">
+                                Beneficios
+                              </span>
+                              <span className="text-xs text-slate-500 ml-1">activos</span>
+                            </div>
+                          </div>
+                        </div>
                       </th>
-                      <th className="hidden xl:table-cell px-3 lg:px-6 py-3 lg:py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                        Puntuación
+                      <th className="hidden xl:table-cell px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                        Calificación
                       </th>
-                      <th className="px-3 lg:px-6 py-3 lg:py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                        Acciones
+                      <th className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center space-x-1">
+                          {/* Table header actions should not reference 'comercio' */}
+                          {/* <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleViewBeneficios(comercio)}
+                            className="p-1.5 lg:p-2 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                            title="Ver todos los beneficios"
+                          >
+                            <Eye size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button> */}
+
+                          {/* Table header actions should not reference 'comercio' */}
+                          {/* <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleViewValidations(comercio)}
+                            className="p-1.5 lg:p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                            title="Ver validaciones"
+                          >
+                            <FileText size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button>
+
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleGenerateQR(comercio)}
+                            className="p-1.5 lg:p-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-all duration-200"
+                            title="Generar QR"
+                          >
+                            <QrCode size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button>
+                          
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleEdit(comercio)}
+                            className="p-1.5 lg:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-all duration-200"
+                            title="Editar"
+                          >
+                            <Edit size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button>
+
+                          {comercio.estado === 'activo' ? (
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleStatusChange(comercio, 'inactivo')}
+                              className="p-1.5 lg:p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
+                              title="Desactivar"
+                            >
+                              <PowerOff size={14} className="lg:w-4 lg:h-4" />
+                            </motion.button>
+                          ) : (
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleStatusChange(comercio, 'activo')}
+                              className="p-1.5 lg:p-2 text-emerald-600 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-all duration-200"
+                              title="Activar"
+                            >
+                              <Power size={14} className="lg:w-4 lg:h-4" />
+                            </motion.button>
+                          )}
+                          
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setComercioToUnlink(comercio)}
+                            className="p-1.5 lg:p-2 text-orange-600 hover:text-orange-900 hover:bg-orange-50 rounded-lg transition-all duration-200"
+                            title="Desvincular"
+                          >
+                            <Unlink size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button>
+
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setComercioToDelete(comercio)}
+                            className="p-1.5 lg:p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={14} className="lg:w-4 lg:h-4" />
+                          </motion.button> */}
+                        </div>
                       </th>
                     </tr>
                   </thead>

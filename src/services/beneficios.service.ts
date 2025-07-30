@@ -68,6 +68,34 @@ export class BeneficiosService {
     }
   }
 
+  // NUEVO: Actualizar contador de beneficios activos en el comercio
+  private static async actualizarContadorBeneficiosComercio(comercioId: string): Promise<void> {
+    try {
+      console.log('🔄 Actualizando contador de beneficios para comercio:', comercioId);
+
+      // Contar beneficios activos del comercio
+      const q = query(
+        collection(db, this.BENEFICIOS_COLLECTION),
+        where('comercioId', '==', comercioId),
+        where('estado', '==', 'activo')
+      );
+
+      const snapshot = await getDocs(q);
+      const beneficiosActivos = snapshot.size;
+
+      // Actualizar el contador en el documento del comercio
+      const comercioRef = doc(db, this.COMERCIOS_COLLECTION, comercioId);
+      await updateDoc(comercioRef, {
+        beneficiosActivos,
+        actualizadoEn: Timestamp.now()
+      });
+
+      console.log(`✅ Contador actualizado: ${beneficiosActivos} beneficios activos para comercio ${comercioId}`);
+    } catch (error) {
+      console.error('❌ Error actualizando contador de beneficios:', error);
+    }
+  }
+
   // Función auxiliar para limpiar datos antes de enviar a Firebase
   private static cleanDataForFirestore(data: Record<string, unknown>): Record<string, unknown> {
     const cleaned: Record<string, unknown> = {};
@@ -149,7 +177,9 @@ export class BeneficiosService {
       const cacheKey = this.getCacheKey('beneficios_disponibles_socio', { socioId, asociacionId, filtros, limite });
       
       if (this.isValidCache(cacheKey)) {
-        return this.getCache(cacheKey) as Beneficio[];
+        const cachedBeneficios = this.getCache(cacheKey) as Beneficio[];
+        console.log(`📦 Beneficios desde cache: ${cachedBeneficios.length}`);
+        return cachedBeneficios;
       }
 
       let beneficios: Beneficio[] = [];
@@ -521,7 +551,7 @@ export class BeneficiosService {
     }
   }
 
-  // CRUD Básico
+  // CRUD Básico - ACTUALIZADO para mantener contador sincronizado
   static async crearBeneficio(data: BeneficioFormData, userId: string, userRole: string): Promise<string> {
     try {
       console.log('🎁 Creando beneficio:', data.titulo);
@@ -627,6 +657,11 @@ export class BeneficiosService {
 
       const docRef = await addDoc(collection(db, this.BENEFICIOS_COLLECTION), cleanedData);
       
+      // NUEVO: Actualizar contador de beneficios activos en el comercio
+      if (comercioId) {
+        await this.actualizarContadorBeneficiosComercio(comercioId);
+      }
+      
       // Limpiar cache
       this.clearCache('beneficios');
       
@@ -665,6 +700,12 @@ export class BeneficiosService {
   static async actualizarBeneficio(id: string, data: Partial<BeneficioFormData>): Promise<void> {
     try {
       console.log('📝 Actualizando beneficio:', id);
+
+      // Obtener el beneficio actual para saber el comercioId
+      const beneficioActual = await this.obtenerBeneficio(id);
+      if (!beneficioActual) {
+        throw new Error('Beneficio no encontrado');
+      }
 
       // Crear el objeto de actualización con tipos correctos
       const updateDataBase: Partial<Omit<BeneficioFormData, 'fechaInicio' | 'fechaFin'>>
@@ -726,6 +767,11 @@ export class BeneficiosService {
       const docRef = doc(db, this.BENEFICIOS_COLLECTION, id);
       await updateDoc(docRef, cleanedUpdateData as Partial<BeneficioFormData>);
 
+      // NUEVO: Actualizar contador si el comercio cambió o si cambió el estado
+      if (beneficioActual.comercioId) {
+        await this.actualizarContadorBeneficiosComercio(beneficioActual.comercioId);
+      }
+
       // Limpiar cache
       this.clearCache('beneficio');
       this.clearCache('beneficios');
@@ -741,8 +787,16 @@ export class BeneficiosService {
     try {
       console.log('🗑️ Eliminando beneficio:', id);
 
+      // Obtener el beneficio para saber el comercioId antes de eliminarlo
+      const beneficio = await this.obtenerBeneficio(id);
+      
       // En lugar de eliminar, marcamos como inactivo
       await this.actualizarEstadoBeneficio(id, 'inactivo');
+
+      // NUEVO: Actualizar contador de beneficios activos en el comercio
+      if (beneficio?.comercioId) {
+        await this.actualizarContadorBeneficiosComercio(beneficio.comercioId);
+      }
 
       console.log('✅ Beneficio eliminado (marcado como inactivo)');
     } catch (error) {
@@ -753,11 +807,19 @@ export class BeneficiosService {
 
   static async actualizarEstadoBeneficio(id: string, estado: 'activo' | 'inactivo' | 'vencido' | 'agotado'): Promise<void> {
     try {
+      // Obtener el beneficio para saber el comercioId
+      const beneficio = await this.obtenerBeneficio(id);
+      
       const docRef = doc(db, this.BENEFICIOS_COLLECTION, id);
       await updateDoc(docRef, {
         estado,
         actualizadoEn: Timestamp.now()
       });
+
+      // NUEVO: Actualizar contador de beneficios activos en el comercio
+      if (beneficio?.comercioId) {
+        await this.actualizarContadorBeneficiosComercio(beneficio.comercioId);
+      }
 
       this.clearCache('beneficio');
       this.clearCache('beneficios');
@@ -936,6 +998,11 @@ export class BeneficiosService {
 
       await batch.commit();
 
+      // NUEVO: Actualizar contador si el beneficio se agotó
+      if (beneficio.limiteTotal && beneficio.usosActuales + 1 >= beneficio.limiteTotal) {
+        await this.actualizarContadorBeneficiosComercio(comercioId);
+      }
+
       // Limpiar cache
       this.clearCache();
 
@@ -1036,7 +1103,7 @@ export class BeneficiosService {
       } else {
         // Consultas paralelas para mejor rendimiento (comportamiento original)
         const [beneficiosSnapshot, usosSnapshot] = await Promise.all([
-          this.obtenerBeneficiosParaEstadisticas(filtros),
+          this.obtenerBeneficiosParaEstadisticas(filtros        ),
           this.obtenerUsosParaEstadisticas(filtros)
         ]);
 
@@ -1341,8 +1408,14 @@ export class BeneficiosService {
       }
 
       const batch = writeBatch(db);
+      const comerciosAfectados = new Set<string>();
       
       snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.comercioId) {
+          comerciosAfectados.add(data.comercioId);
+        }
+        
         batch.update(doc.ref, {
           estado: 'vencido',
           actualizadoEn: now
@@ -1350,6 +1423,11 @@ export class BeneficiosService {
       });
 
       await batch.commit();
+      
+      // NUEVO: Actualizar contadores de comercios afectados
+      for (const comercioId of comerciosAfectados) {
+        await this.actualizarContadorBeneficiosComercio(comercioId);
+      }
       
       console.log(`✅ Se marcaron ${snapshot.size} beneficios como vencidos`);
       
@@ -1452,4 +1530,26 @@ export class BeneficiosService {
       return [];
     }
   }
+
+  // NUEVO: Método para sincronizar todos los contadores de beneficios activos
+  static async sincronizarContadoresBeneficios(): Promise<void> {
+    try {
+      console.log('🔄 Sincronizando todos los contadores de beneficios...');
+
+      // Obtener todos los comercios
+      const comerciosSnapshot = await getDocs(collection(db, this.COMERCIOS_COLLECTION));
+      
+      for (const comercioDoc of comerciosSnapshot.docs) {
+        await this.actualizarContadorBeneficiosComercio(comercioDoc.id);
+      }
+
+      console.log('✅ Sincronización de contadores completada');
+    } catch (error) {
+      console.error('❌ Error sincronizando contadores:', error);
+    }
+  }
 }
+
+// Export singleton instance
+export default BeneficiosService;
+

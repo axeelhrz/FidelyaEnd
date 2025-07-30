@@ -8,7 +8,6 @@ import {
   Gift, 
   DollarSign, 
   Users, 
-  Calendar,
   Award,
   Target,
   BarChart3,
@@ -76,7 +75,7 @@ const StatCard: React.FC<StatCardProps> = ({
           )}
         </div>
 
-        {change !== undefined && (
+        {change !== undefined && change !== 0 && (
           <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
             trend === 'up' ? 'bg-green-100 text-green-700' :
             trend === 'down' ? 'bg-red-100 text-red-700' :
@@ -283,6 +282,7 @@ export const BeneficiosStats: React.FC<BeneficiosStatsProps> = ({
     return meses;
   }, [beneficiosUsados]);
 
+  // Estadísticas principales sin porcentajes y sin "Ahorro Este Mes"
   const statsCards = [
     {
       title: 'Total Beneficios',
@@ -290,17 +290,13 @@ export const BeneficiosStats: React.FC<BeneficiosStatsProps> = ({
       icon: <Gift size={24} />,
       color: '#6366f1',
       subtitle: userRole === 'socio' ? 'Disponibles para ti' : 'En la plataforma',
-      change: realStats.totalBeneficios > 0 ? 5.2 : 0,
-      trend: 'up' as const
     },
     {
       title: 'Beneficios Activos',
       value: realStats.beneficiosActivos.toLocaleString(),
       icon: <Target size={24} />,
       color: '#10b981',
-      subtitle: `Disponibles para usar • ${realStats.porcentajeActivos.toFixed(1)}%`,
-      change: realStats.beneficiosActivos > 0 ? 8.1 : 0,
-      trend: 'up' as const
+      subtitle: 'Disponibles para usar',
     },
     {
       title: 'Total Usado',
@@ -321,18 +317,6 @@ export const BeneficiosStats: React.FC<BeneficiosStatsProps> = ({
       trend: realStats.cambioAhorro > 0 ? 'up' : realStats.cambioAhorro < 0 ? 'down' : 'neutral'
     }
   ];
-
-  if (userRole === 'socio') {
-    statsCards.push({
-      title: 'Ahorro Este Mes',
-      value: `$${realStats.ahorroEsteMes.toLocaleString()}`,
-      icon: <Calendar size={24} />,
-      color: '#ec4899',
-      subtitle: 'En el mes actual',
-      change: realStats.cambioAhorro,
-      trend: realStats.cambioAhorro > 0 ? 'up' : realStats.cambioAhorro < 0 ? 'down' : 'neutral'
-    });
-  }
 
   if (loading) {
     return (

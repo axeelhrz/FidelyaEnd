@@ -10,7 +10,6 @@ import {
   Building2, 
   Users, 
   Info,
-  TrendingUp,
   Calendar,
   DollarSign,
   Sparkles,
@@ -222,7 +221,7 @@ export default function SocioBeneficiosPage() {
               </div>
             </div>
 
-            {/* Enhanced Quick Stats */}
+            {/* Enhanced Quick Stats - Sin porcentajes y sin "Ahorro Este Mes" */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8">
               <motion.div
                 className="bg-gradient-to-br from-emerald-50 to-green-100 rounded-2xl p-4 lg:p-6 border border-emerald-200/50 shadow-lg hover:shadow-xl transition-all duration-300"
@@ -265,21 +264,21 @@ export default function SocioBeneficiosPage() {
               </motion.div>
 
               <motion.div
-                className="bg-gradient-to-br from-pink-50 to-rose-100 rounded-2xl p-4 lg:p-6 border border-pink-200/50 shadow-lg hover:shadow-xl transition-all duration-300"
+                className="bg-gradient-to-br from-amber-50 to-orange-100 rounded-2xl p-4 lg:p-6 border border-amber-200/50 shadow-lg hover:shadow-xl transition-all duration-300 col-span-2 lg:col-span-1"
                 whileHover={{ y: -4, scale: 1.02 }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                    <TrendingUp size={24} />
+                  <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                    <DollarSign size={24} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xl lg:text-2xl font-black text-pink-700">
-                      ${estadisticasRapidas.ahorroEsteMes.toLocaleString()}
+                    <div className="text-xl lg:text-2xl font-black text-amber-700">
+                      ${estadisticasRapidas.ahorroTotal.toLocaleString()}
                     </div>
-                    <div className="text-sm font-semibold text-pink-600 truncate">Este Mes</div>
+                    <div className="text-sm font-semibold text-amber-600 truncate">Ahorro Total</div>
                   </div>
                 </div>
               </motion.div>
@@ -506,6 +505,7 @@ export default function SocioBeneficiosPage() {
                 stats={stats}
                 loading={loading}
                 userRole="socio"
+                beneficios={beneficios}
                 beneficiosUsados={beneficiosUsados}
               />
             </motion.div>

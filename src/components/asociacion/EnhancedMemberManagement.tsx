@@ -42,7 +42,16 @@ import toast from 'react-hot-toast';
 import Image from 'next/image';
 import * as XLSX from 'xlsx';
 
-export const EnhancedMemberManagement = () => {
+// Props interface for the component
+interface EnhancedMemberManagementProps {
+  triggerNewSocio?: boolean;
+  onNewSocioTriggered?: () => void;
+}
+
+export const EnhancedMemberManagement = ({ 
+  triggerNewSocio = false, 
+  onNewSocioTriggered 
+}: EnhancedMemberManagementProps) => {
   const { 
     socios, 
     loading, 
@@ -94,6 +103,17 @@ export const EnhancedMemberManagement = () => {
     loadVinculados();
   }, [loadSocios, loadVinculados]);
 
+  // Handle trigger for new socio from external sources
+  useEffect(() => {
+    if (triggerNewSocio && !dialogOpen) {
+      setSelectedSocio(null);
+      setDialogOpen(true);
+      if (onNewSocioTriggered) {
+        onNewSocioTriggered();
+      }
+    }
+  }, [triggerNewSocio, dialogOpen, onNewSocioTriggered]);
+
   // Función para refrescar datos
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -107,7 +127,6 @@ export const EnhancedMemberManagement = () => {
     }
   };
 
-  // ... (keeping all the existing functions for data handling)
   // Función para convertir fechas a formato compatible
   const convertDateToTimestamp = (date: Date | Timestamp | string | undefined): Timestamp | undefined => {
     if (!date) return undefined;
@@ -216,7 +235,6 @@ export const EnhancedMemberManagement = () => {
     setSocioToUnlink(null);
   };
 
-  // ... (keeping all export/import functions as they are well implemented)
   // Función mejorada para exportar datos a Excel con diseño atractivo
   const handleExportExcel = async () => {
     if (exporting) return;
@@ -1194,13 +1212,15 @@ export const EnhancedMemberManagement = () => {
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-red-900 mb-2">Error al cargar los socios</h3>
           <p className="text-red-700 mb-4">{error}</p>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={handleRefresh}
-            className="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium"
+            className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-2xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
           >
             <RefreshCw className="w-5 h-5 mr-2" />
             Reintentar
-          </button>
+          </motion.button>
         </div>
       </motion.div>
     );
@@ -1302,88 +1322,113 @@ export const EnhancedMemberManagement = () => {
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-3">
               {/* View Mode Toggle */}
-              <div className="flex items-center bg-slate-100 rounded-xl p-1">
-                <button
+              <div className="flex items-center bg-slate-100/80 backdrop-blur-sm rounded-2xl p-1.5 border border-slate-200/50 shadow-sm">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-all duration-200 ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 ${
                     viewMode === 'list' 
-                      ? 'bg-white shadow-sm text-blue-600' 
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white shadow-md text-blue-600 scale-105' 
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                   }`}
                   title="Vista de lista"
                 >
                   <List className="w-4 h-4" />
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-all duration-200 ${
+                  className={`p-2.5 rounded-xl transition-all duration-200 ${
                     viewMode === 'grid' 
-                      ? 'bg-white shadow-sm text-blue-600' 
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white shadow-md text-blue-600 scale-105' 
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                   }`}
                   title="Vista de cuadrícula"
                 >
                   <Grid3X3 className="w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
 
               {/* Filters Toggle */}
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 font-medium ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 transition-all duration-200 font-medium shadow-sm hover:shadow-md ${
                   showFilters 
-                    ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' 
-                    : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white hover:shadow-sm'
+                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-300 text-blue-700 shadow-md' 
+                    : 'bg-white/80 backdrop-blur-sm border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
                 }`}
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 <span className="hidden sm:inline">Filtros</span>
-                {showFilters && <X className="w-4 h-4" />}
-              </button>
+                {showFilters && (
+                  <motion.div
+                    initial={{ rotate: 0 }}
+                    animate={{ rotate: 180 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <X className="w-4 h-4" />
+                  </motion.div>
+                )}
+              </motion.button>
 
               {/* Add Registered Socio */}
               <AddRegisteredSocioButton 
                 onSocioAdded={handleRefresh}
-                className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2.5 rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+                className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white px-5 py-2.5 rounded-2xl hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 border border-white/20 relative overflow-hidden group"
               />
 
               {/* New Socio Button */}
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   setSelectedSocio(null);
                   setDialogOpen(true);
                 }}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-2xl hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl border border-white/20 relative overflow-hidden group"
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Nuevo Socio</span>
-              </button>
+                <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <Plus className="w-4 h-4 relative z-10" />
+                <span className="hidden sm:inline relative z-10">Nuevo Socio</span>
+              </motion.button>
 
               {/* More Actions Dropdown */}
               <div className="relative group">
-                <button className="p-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-200">
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="p-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all duration-200 border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md"
+                >
                   <MoreVertical className="w-5 h-5" />
-                </button>
+                </motion.button>
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
                   <div className="p-2">
                     {/* Templates Section */}
                     <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Plantillas
                     </div>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={downloadExcelTemplate}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-xl flex items-center gap-3 transition-all duration-200"
                     >
                       <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                       <span>Descargar Excel</span>
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={downloadCSVTemplate}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-xl flex items-center gap-3 transition-all duration-200"
                     >
                       <FileText className="w-4 h-4 text-blue-600" />
                       <span>Descargar CSV</span>
-                    </button>
+                    </motion.button>
 
                     <div className="h-px bg-slate-200 my-2" />
 
@@ -1391,45 +1436,53 @@ export const EnhancedMemberManagement = () => {
                     <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Exportar
                     </div>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={handleExportExcel}
                       disabled={exporting || socios.length === 0}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-xl flex items-center gap-3 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                       <span>Exportar Excel</span>
-                      {exporting && <div className="w-3 h-3 border border-slate-300 border-t-slate-600 rounded-full animate-spin ml-auto" />}
-                    </button>
-                    <button
+                      {exporting && <div className="w-3 h-3 border border-slate-300 border-t-emerald-600 rounded-full animate-spin ml-auto" />}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={handleExportCSV}
                       disabled={exporting || socios.length === 0}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-xl flex items-center gap-3 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FileText className="w-4 h-4 text-blue-600" />
                       <span>Exportar CSV</span>
-                      {exporting && <div className="w-3 h-3 border border-slate-300 border-t-slate-600 rounded-full animate-spin ml-auto" />}
-                    </button>
+                      {exporting && <div className="w-3 h-3 border border-slate-300 border-t-blue-600 rounded-full animate-spin ml-auto" />}
+                    </motion.button>
 
                     <div className="h-px bg-slate-200 my-2" />
 
                     {/* Import and Refresh */}
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => document.getElementById('import-file')?.click()}
                       disabled={importing}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl flex items-center gap-3 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Upload className="w-4 h-4 text-indigo-600" />
                       <span>Importar datos</span>
-                      {importing && <div className="w-3 h-3 border border-slate-300 border-t-slate-600 rounded-full animate-spin ml-auto" />}
-                    </button>
-                    <button
+                      {importing && <div className="w-3 h-3 border border-slate-300 border-t-indigo-600 rounded-full animate-spin ml-auto" />}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={handleRefresh}
                       disabled={refreshing}
-                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-colors disabled:opacity-50"
+                      className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-3 transition-all duration-200 disabled:opacity-50"
                     >
                       <RefreshCw className={`w-4 h-4 text-slate-600 ${refreshing ? 'animate-spin' : ''}`} />
                       <span>Actualizar datos</span>
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               </div>
@@ -1507,7 +1560,9 @@ export const EnhancedMemberManagement = () => {
                   </div>
 
                   <div className="mt-4 flex justify-between items-center">
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         setFilters({
                           estado: '',
@@ -1517,11 +1572,11 @@ export const EnhancedMemberManagement = () => {
                         });
                         setSearchTerm('');
                       }}
-                      className="text-sm text-slate-600 hover:text-slate-900 font-medium"
+                      className="text-sm text-slate-600 hover:text-slate-900 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-all duration-200"
                     >
                       Limpiar todos los filtros
-                    </button>
-                    <div className="text-sm text-slate-600">
+                    </motion.button>
+                    <div className="text-sm text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg">
                       Mostrando {filteredSocios.length} de {socios.length} socios
                     </div>
                   </div>
@@ -1577,18 +1632,20 @@ export const EnhancedMemberManagement = () => {
                   <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <AddRegisteredSocioButton 
                       onSocioAdded={handleRefresh}
-                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg"
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                     />
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={() => {
                         setSelectedSocio(null);
                         setDialogOpen(true);
                       }}
-                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg"
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                     >
                       <Plus className="w-5 h-5 mr-2" />
                       Crear Nuevo Socio
-                    </button>
+                    </motion.button>
                   </div>
                 )}
               </motion.div>
@@ -1629,14 +1686,6 @@ export const EnhancedMemberManagement = () => {
                             socio.estado === 'suspendido' ? 'bg-red-500' : 'bg-yellow-500'
                           }`} />
                         </div>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-lg ${
-                          socio.estadoMembresia === 'al_dia' ? 'bg-emerald-100 text-emerald-700' :
-                          socio.estadoMembresia === 'vencido' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {socio.estadoMembresia === 'al_dia' ? 'Al día' :
-                           socio.estadoMembresia === 'vencido' ? 'Vencido' : 'Pendiente'}
-                        </span>
                       </div>
 
                       {/* Member Info */}
@@ -1670,30 +1719,36 @@ export const EnhancedMemberManagement = () => {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2">
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => {
                             setSelectedSocio(socio);
                             setDialogOpen(true);
                           }}
-                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all duration-200"
                         >
                           <Edit3 className="w-3 h-3" />
                           Editar
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => handleDeleteClick(socio)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
                           title="Eliminar"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => handleUnlinkClick(socio)}
-                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-all duration-200"
                           title="Desvincular"
                         >
                           <Unlink className="w-3 h-3" />
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
                   </motion.div>
@@ -1796,16 +1851,6 @@ export const EnhancedMemberManagement = () => {
                           }`}>
                             {socio.estado.charAt(0).toUpperCase() + socio.estado.slice(1)}
                           </span>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            socio.estadoMembresia === 'al_dia'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : socio.estadoMembresia === 'vencido'
-                              ? 'bg-red-50 text-red-700 border border-red-200'
-                              : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-                          }`}>
-                            {socio.estadoMembresia === 'al_dia' ? 'Al día' :
-                             socio.estadoMembresia === 'vencido' ? 'Vencido' : 'Pendiente'}
-                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 hidden lg:table-cell">
@@ -1826,32 +1871,38 @@ export const EnhancedMemberManagement = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
-                          <button
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => {
                               setSelectedSocio(socio);
                               setDialogOpen(true);
                             }}
-                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
                             title="Editar socio"
                           >
                             <Edit3 className="w-4 h-4 mr-1" />
                             <span className="hidden sm:inline">Editar</span>
-                          </button>
+                          </motion.button>
                           <div className="flex items-center gap-1">
-                            <button
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => handleDeleteClick(socio)}
-                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200 border border-transparent hover:border-red-200"
                               title="Eliminar socio"
                             >
                               <Trash2 className="w-4 h-4" />
-                            </button>
-                            <button
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => handleUnlinkClick(socio)}
-                              className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-all duration-200"
+                              className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-xl transition-all duration-200 border border-transparent hover:border-orange-200"
                               title="Desvincular socio"
                             >
                               <Unlink className="w-4 h-4" />
-                            </button>
+                            </motion.button>
                           </div>
                         </div>
                       </td>

@@ -69,6 +69,57 @@ service cloud.firestore {
       );
     }
     
+    // Reglas para clientes
+    match /clientes/{clienteId} {
+      // Lectura: comercios pueden ver sus propios clientes, asociaciones pueden ver clientes de sus comercios
+      allow read: if request.auth != null && (
+        (request.auth.token.role == 'comercio' && 
+         request.auth.uid == resource.data.comercioId) ||
+        (request.auth.token.role == 'asociacion' && 
+         request.auth.uid == resource.data.asociacionId) ||
+        (request.auth.token.role == 'socio' && 
+         request.auth.uid == resource.data.socioId)
+      );
+      
+      // Escritura: comercios pueden crear/editar clientes de su comercio
+      allow create: if request.auth != null && 
+        request.auth.token.role == 'comercio' &&
+        request.auth.uid == request.resource.data.comercioId &&
+        request.resource.data.keys().hasAll(['nombre', 'email', 'comercioId', 'estado', 'creadoEn', 'actualizadoEn']);
+      
+      allow update: if request.auth != null && 
+        request.auth.token.role == 'comercio' &&
+        request.auth.uid == resource.data.comercioId &&
+        request.resource.data.comercioId == resource.data.comercioId; // No cambiar el comercio
+      
+      // Eliminación: solo el comercio propietario
+      allow delete: if request.auth != null && 
+        request.auth.token.role == 'comercio' &&
+        request.auth.uid == resource.data.comercioId;
+    }
+    
+    // Reglas para actividades de clientes
+    match /cliente_activities/{activityId} {
+      // Lectura: comercios pueden ver actividades de sus clientes
+      allow read: if request.auth != null && 
+        request.auth.token.role == 'comercio';
+      
+      // Escritura: comercios pueden crear actividades
+      allow create: if request.auth != null && 
+        request.auth.token.role == 'comercio' &&
+        request.resource.data.keys().hasAll(['clienteId', 'tipo', 'descripcion', 'fecha']);
+      
+      // No permitir actualización o eliminación de actividades
+      allow update, delete: if false;
+    }
+    
+    // Reglas para segmentos de clientes
+    match /cliente_segments/{segmentId} {
+      // Solo comercios pueden gestionar sus segmentos
+      allow read, write: if request.auth != null && 
+        request.auth.token.role == 'comercio';
+    }
+    
     // Reglas para usuarios (necesarias para obtener datos de perfil)
     match /users/{userId} {
       allow read: if request.auth != null;
@@ -91,6 +142,14 @@ service cloud.firestore {
     match /socios/{socioId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == socioId;
+    }
+    
+    // Reglas para validaciones QR (necesarias para crear clientes automáticamente)
+    match /validaciones/{validacionId} {
+      allow read, write: if request.auth != null && (
+        request.auth.token.role == 'comercio' ||
+        request.auth.token.role == 'socio'
+      );
     }
   }
 }

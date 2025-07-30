@@ -1,55 +1,108 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { SocioSidebar } from '@/components/layout/SocioSidebar';
 import { LogoutModal } from '@/components/ui/LogoutModal';
-import { SocioOverviewDashboard } from '@/components/socio/SocioOverviewDashboard';
+import { OptimizedSocioTabSystem } from '@/components/layout/OptimizedSocioTabSystem';
+import { SocioWelcomeCard } from '@/components/socio/SocioWelcomeCard';
 import { useAuth } from '@/hooks/useAuth';
+import { useSocioProfile } from '@/hooks/useSocioProfile';
+import { useBeneficios } from '@/hooks/useBeneficios';
 
-// Enhanced Sidebar with logout functionality
-const SocioSidebarWithLogout: React.FC<{
-  open: boolean;
-  onToggle: () => void;
-  onMenuClick: (section: string) => void;
-  activeSection: string;
-  onLogoutClick: () => void;
-}> = (props) => {
-  return (
-    <SocioSidebar
-      open={props.open}
-      onToggle={props.onToggle}
-      onMenuClick={props.onMenuClick}
-      onLogoutClick={props.onLogoutClick}
-      activeSection={props.activeSection}
-    />
-  );
-};
+// Optimized loading component
+const OptimizedLoadingState = memo(() => (
+  <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center">
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="text-center"
+    >
+      <div className="relative mb-8">
+        <div className="w-20 h-20 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin mx-auto" />
+        <motion.div
+          animate={{ rotate: -360 }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-blue-500 rounded-full mx-auto"
+        />
+      </div>
+      <motion.h2 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-blue-700 bg-clip-text text-transparent mb-3"
+      >
+        Inicializando Dashboard
+      </motion.h2>
+      <motion.p 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="text-slate-600 text-lg"
+      >
+        Cargando tu panel de beneficios...
+      </motion.p>
+    </motion.div>
+  </div>
+));
 
-export default function SocioDashboard() {
+OptimizedLoadingState.displayName = 'OptimizedLoadingState';
+
+// Main component
+export default function OptimizedSocioDashboard() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
+  const { socio, estadisticas, loading: socioLoading } = useSocioProfile();
+  const { estadisticasRapidas, beneficiosActivos, loading: beneficiosLoading } = useBeneficios();
   
-  // State management
-  const [activeSection, setActiveSection] = useState('dashboard');
+  // State management - optimized to prevent unnecessary re-renders
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [currentSection, setCurrentSection] = useState('dashboard');
 
-  // Redirect if not authenticated or not socio
-  if (!authLoading && (!user || user.role !== 'socio')) {
-    router.push('/auth/login');
-    return null;
-  }
+  // Memoized consolidated stats
+  const consolidatedStats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-  // Logout handlers
-  const handleLogoutClick = () => {
+    // Calcular beneficios del mes actual
+    const beneficiosEstesMes = estadisticas?.validacionesPorMes?.find(mes => {
+      const [year, month] = mes.mes.split('-').map(Number);
+      return year === currentYear && month === currentMonth + 1;
+    })?.validaciones || 0;
+
+    // Filtrar beneficios activos y válidos (igual que en BeneficiosList)
+    const beneficiosValidos = beneficiosActivos.filter(beneficio => {
+      const fechaFin = beneficio.fechaFin.toDate();
+      const fechaInicio = beneficio.fechaInicio.toDate();
+      
+      // Verificar que esté dentro del rango de fechas válido
+      if (fechaFin <= now || fechaInicio > now) return false;
+      
+      // Verificar límite total si existe
+      if (beneficio.limiteTotal && beneficio.usosActuales >= beneficio.limiteTotal) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    return {
+      totalBeneficios: beneficiosValidos.length, // Beneficios realmente disponibles y válidos
+      beneficiosUsados: estadisticasRapidas.usados || 0, // Beneficios que ya ha usado
+      asociacionesActivas: 1, // Por ahora asumimos 1 asociación
+      beneficiosEstesMes
+    };
+  }, [beneficiosActivos, estadisticasRapidas, estadisticas]);
+
+  // Optimized logout handlers
+  const handleLogoutClick = useCallback(() => {
     setLogoutModalOpen(true);
-  };
+  }, []);
 
-  const handleLogoutConfirm = async () => {
+  const handleLogoutConfirm = useCallback(async () => {
     setLoggingOut(true);
     try {
       await signOut();
@@ -62,92 +115,69 @@ export default function SocioDashboard() {
       setLoggingOut(false);
       setLogoutModalOpen(false);
     }
-  };
+  }, [signOut, router]);
 
-  const handleLogoutCancel = () => {
+  const handleLogoutCancel = useCallback(() => {
     setLogoutModalOpen(false);
-  };
+  }, []);
 
-  // Navigation handlers - Updated to include asociaciones route
-  const handleNavigate = (section: string) => {
-    const sectionRoutes: Record<string, string> = {
-      'dashboard': '/dashboard/socio',
-      'perfil': '/dashboard/socio/perfil',
-      'beneficios': '/dashboard/socio/beneficios',
-      'asociaciones': '/dashboard/socio/asociaciones',
-      'validar': '/dashboard/socio/validar',
-      'historial': '/dashboard/socio/historial'
-    };
+  // Optimized navigation handler
+  const handleNavigate = useCallback((section: string) => {
+    setCurrentSection(section);
+  }, []);
 
-    const route = sectionRoutes[section];
-    if (route && route !== '/dashboard/socio') {
-      router.push(route);
-    } else {
-      setActiveSection(section);
-    }
-  };
+  // Quick scan handler
+  const handleQuickScan = useCallback(() => {
+    setCurrentSection('validar');
+  }, []);
 
-  const handleQuickScan = () => {
-    router.push('/dashboard/socio/validar');
-  };
+  // View profile handler
+  const handleViewProfile = useCallback(() => {
+    setCurrentSection('perfil');
+  }, []);
 
-  // Loading state with modern design
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="text-center max-w-md mx-auto">
-          <div className="relative mb-8">
-            <div className="w-20 h-20 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto" />
-            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-r-indigo-300 rounded-full animate-pulse mx-auto" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-3">
-            Cargando Dashboard
-          </h2>
-          <p className="text-slate-600 text-lg">
-            Preparando tu panel de beneficios...
-          </p>
-          <div className="mt-6 flex justify-center space-x-1">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-        </div>
-      </div>
-    );
+  // Redirect if not authenticated or not socio
+  if (!authLoading && (!user || user.role !== 'socio')) {
+    router.push('/auth/login');
+    return null;
+  }
+
+  // Loading state
+  if (authLoading || socioLoading || beneficiosLoading) {
+    return <OptimizedLoadingState />;
   }
 
   return (
     <>
-      <DashboardLayout 
-        activeSection={activeSection} 
-        onSectionChange={setActiveSection}
-        sidebarComponent={(props) => (
-          <SocioSidebarWithLogout
-            {...props}
-            onLogoutClick={handleLogoutClick}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+        <div className="p-3 sm:p-4 lg:p-6 xl:p-8 space-y-4 sm:space-y-6 lg:space-y-8 max-w-7xl mx-auto">
+          {/* Optimized Welcome Card */}
+          <SocioWelcomeCard
+            user={user ?? {}}
+            socio={socio ?? undefined}
+            stats={consolidatedStats}
+            onQuickScan={handleQuickScan}
+            onViewProfile={handleViewProfile}
+            onLogout={handleLogoutClick}
           />
-        )}
-      >
-        <motion.div
-          key={activeSection}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="min-h-screen"
-        >
-          {/* Modern gradient background */}
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/20">
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-7xl">
-              <SocioOverviewDashboard
-                onNavigate={handleNavigate}
-                onQuickScan={handleQuickScan}
-              />
-            </div>
-          </div>
-        </motion.div>
-      </DashboardLayout>
 
-      {/* Modern Logout Modal */}
+          {/* Ultra Optimized Tab System */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <OptimizedSocioTabSystem
+              onNavigate={handleNavigate}
+              onQuickScan={handleQuickScan}
+              initialTab={currentSection}
+              stats={consolidatedStats}
+            />
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Enhanced Logout Modal */}
       <LogoutModal
         isOpen={logoutModalOpen}
         isLoading={loggingOut}

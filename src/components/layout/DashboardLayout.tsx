@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DashboardSidebar } from './DashboardSidebar';
 import { ArrowUp, X, Menu } from 'lucide-react';
@@ -24,6 +24,85 @@ interface DashboardLayoutProps {
   enableTransitions?: boolean;
 }
 
+// Componente de sidebar memoizado para evitar re-renders
+const MemoizedSidebar = memo<{
+  SidebarComponent: React.ComponentType<SidebarProps>;
+  sidebarProps: SidebarProps;
+}>(({ SidebarComponent, sidebarProps }) => {
+  return <SidebarComponent {...sidebarProps} />;
+});
+
+MemoizedSidebar.displayName = 'MemoizedSidebar';
+
+// Componente de contenido principal memoizado
+const MemoizedMainContent = memo<{
+  children: React.ReactNode;
+  enableTransitions: boolean;
+}>(({ children, enableTransitions }) => {
+  return (
+    <main className="flex-1 overflow-auto">
+      {enableTransitions ? (
+        <SmoothPageTransition className="min-h-full">
+          {children}
+        </SmoothPageTransition>
+      ) : (
+        <div className="min-h-full">
+          {children}
+        </div>
+      )}
+    </main>
+  );
+});
+
+MemoizedMainContent.displayName = 'MemoizedMainContent';
+
+// Componente de botones flotantes memoizado
+const FloatingButtons = memo<{
+  showScrollTop: boolean;
+  isMobile: boolean;
+  onScrollTop: () => void;
+  onQuickAction: () => void;
+}>(({ showScrollTop, isMobile, onScrollTop, onQuickAction }) => (
+  <div className="fixed bottom-6 right-6 flex flex-col space-y-3 z-20">
+    {/* Scroll to Top Button */}
+    <AnimatePresence>
+      {showScrollTop && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0, y: 20 }}
+          whileHover={{ scale: 1.1, y: -2 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onScrollTop}
+          className="w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group"
+        >
+          <ArrowUp className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+
+    {/* Quick Action Button (Mobile) */}
+    {isMobile && (
+      <motion.button
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2 }}
+        whileHover={{ scale: 1.1, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={onQuickAction}
+        className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+        <svg className="w-7 h-7 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </motion.button>
+    )}
+  </div>
+));
+
+FloatingButtons.displayName = 'FloatingButtons';
+
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   activeSection = 'overview',
@@ -32,12 +111,45 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onLogout,
   enableTransitions = true
 }) => {
+  // Estados estables que no cambian con las pestañas
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Handle responsive breakpoints
+  // Memoizar handlers para evitar re-renders del sidebar
+  const handleSidebarToggle = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
+
+  const handleMenuClick = useCallback((section: string) => {
+    if (onSectionChange) {
+      onSectionChange(section);
+    }
+    // Auto-close sidebar on mobile after selection
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [onSectionChange, isMobile]);
+
+  const handleLogout = useCallback(() => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      // Default logout behavior - redirect to login
+      window.location.href = '/auth/login';
+    }
+  }, [onLogout]);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleQuickAction = useCallback(() => {
+    handleMenuClick('validaciones');
+  }, [handleMenuClick]);
+
+  // Handle responsive breakpoints (solo una vez)
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
@@ -69,41 +181,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSidebarToggle = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const handleMenuClick = (section: string) => {
-    if (onSectionChange) {
-      onSectionChange(section);
-    }
-    // Auto-close sidebar on mobile after selection
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  };
-
-  const handleLogout = () => {
-    if (onLogout) {
-      onLogout();
-    } else {
-      // Default logout behavior - redirect to login
-      window.location.href = '/auth/login';
-    }
-  };
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const sidebarProps: SidebarProps = {
+  // Memoizar props del sidebar para evitar re-renders
+  const sidebarProps = useMemo<SidebarProps>(() => ({
     open: sidebarOpen,
     onToggle: handleSidebarToggle,
     onMenuClick: handleMenuClick,
     activeSection: activeSection,
     onLogoutClick: handleLogout,
     isMobile: isMobile,
-  };
+  }), [sidebarOpen, handleSidebarToggle, handleMenuClick, activeSection, handleLogout, isMobile]);
 
   // Don't render until initialized to prevent hydration issues
   if (!isInitialized) {
@@ -149,7 +235,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Sidebar Container */}
+        {/* Sidebar Container - OPTIMIZADO PARA NO RE-RENDERIZAR */}
         <div className={`
           ${isMobile ? 'fixed inset-y-0 left-0 z-50' : 'relative'}
           ${isMobile && !sidebarOpen ? '-translate-x-full' : 'translate-x-0'}
@@ -170,70 +256,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
           )}
           
-          {/* Sidebar Content */}
+          {/* Sidebar Content Memoizado */}
           <div className="h-full">
-            {React.createElement(SidebarComponent, {
-              ...sidebarProps,
-              open: sidebarOpen,
-              isMobile: isMobile
-            })}
+            <MemoizedSidebar 
+              SidebarComponent={SidebarComponent}
+              sidebarProps={sidebarProps}
+            />
           </div>
         </div>
 
-        {/* Main Content Area */}
+        {/* Main Content Area - OPTIMIZADO PARA NO RE-RENDERIZAR */}
         <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-          {/* Main Content with Smooth Transitions */}
-          <main className="flex-1 overflow-auto">
-            {enableTransitions ? (
-              <SmoothPageTransition className="min-h-full">
-                {children}
-              </SmoothPageTransition>
-            ) : (
-              <div className="min-h-full">
-                {children}
-              </div>
-            )}
-          </main>
+          <MemoizedMainContent 
+            enableTransitions={enableTransitions}
+          >
+            {children}
+          </MemoizedMainContent>
         </div>
       </div>
 
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col space-y-3 z-20">
-        {/* Scroll to Top Button */}
-        <AnimatePresence>
-          {showScrollTop && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0, y: 20 }}
-              whileHover={{ scale: 1.1, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={scrollToTop}
-              className="w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group"
-            >
-              <ArrowUp className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" />
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        {/* Quick Action Button (Mobile) */}
-        {isMobile && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            whileHover={{ scale: 1.1, y: -2 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => handleMenuClick('validaciones')}
-            className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center relative overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
-            <svg className="w-7 h-7 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </motion.button>
-        )}
-      </div>
+      {/* Floating Action Buttons - MEMOIZADO */}
+      <FloatingButtons
+        showScrollTop={showScrollTop}
+        isMobile={isMobile}
+        onScrollTop={scrollToTop}
+        onQuickAction={handleQuickAction}
+      />
 
       {/* Development Indicator */}
       {process.env.NODE_ENV === 'development' && (

@@ -1,81 +1,218 @@
 import { notificationQueueService } from '@/services/notification-queue.service';
 
-// Configuración del sistema de notificaciones
-export const initializeNotificationSystem = () => {
-  // Solo en el servidor (Node.js)
-  if (typeof window === 'undefined') {
-    console.log('🔔 Inicializando sistema de notificaciones...');
-    
-    // Configurar procesamiento de cola
-    const processingInterval = parseInt(process.env.NOTIFICATION_PROCESSING_INTERVAL || '30000');
-    notificationQueueService.startProcessing(processingInterval);
-    
-    // Configurar limpieza automática
-    const cleanupInterval = parseInt(process.env.NOTIFICATION_CLEANUP_INTERVAL || '86400000'); // 24 horas
-    setInterval(async () => {
-      try {
-        const deletedCount = await notificationQueueService.cleanupOldNotifications(30);
-        console.log(`🧹 Limpieza automática: ${deletedCount} notificaciones eliminadas`);
-      } catch (error) {
-        console.error('❌ Error en limpieza automática:', error);
+interface NotificationConfig {
+  enableBrowserNotifications: boolean;
+  enableSounds: boolean;
+  queueProcessingInterval: number;
+  maxRetries: number;
+  cleanupInterval: number;
+}
+
+class NotificationInitService {
+  private initialized = false;
+  private config: NotificationConfig = {
+    enableBrowserNotifications: true,
+    enableSounds: true,
+    queueProcessingInterval: 15000, // 15 seconds
+    maxRetries: 3,
+    cleanupInterval: 24 * 60 * 60 * 1000, // 24 hours
+  };
+
+  async initialize(customConfig?: Partial<NotificationConfig>): Promise<void> {
+    if (this.initialized) {
+      console.log('📱 Notification system already initialized');
+      return;
+    }
+
+    try {
+      console.log('🔔 Inicializando sistema de notificaciones...');
+
+      // Merge custom config
+      this.config = { ...this.config, ...customConfig };
+
+      // Request browser notification permissions
+      if (this.config.enableBrowserNotifications) {
+        await this.requestNotificationPermissions();
       }
-    }, cleanupInterval);
-    
-    // Monitoreo de salud del sistema
-    const healthCheckInterval = parseInt(process.env.NOTIFICATION_HEALTH_CHECK_INTERVAL || '300000'); // 5 minutos
+
+      // Initialize queue processing
+      this.initializeQueueProcessing();
+
+      // Setup periodic cleanup
+      this.setupPeriodicCleanup();
+
+      // Validate configuration
+      await this.validateConfiguration();
+
+      this.initialized = true;
+      console.log('✅ Sistema de notificaciones inicializado correctamente');
+
+    } catch (error) {
+      console.error('❌ Error initializing notification system:', error);
+      throw error;
+    }
+  }
+
+  private async requestNotificationPermissions(): Promise<void> {
+    if (!('Notification' in window)) {
+      console.warn('⚠️ Browser notifications not supported');
+      return;
+    }
+
+    try {
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          console.log('✅ Browser notification permissions granted');
+          
+          // Show welcome notification
+          new Notification('Fidelya - Notificaciones Activadas', {
+            body: 'Recibirás notificaciones importantes en tiempo real',
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            tag: 'welcome',
+            requireInteraction: false,
+          });
+        } else {
+          console.warn('⚠️ Browser notification permissions denied');
+        }
+      } else if (Notification.permission === 'granted') {
+        console.log('✅ Browser notification permissions already granted');
+      } else {
+        console.warn('⚠️ Browser notification permissions denied');
+      }
+    } catch (error) {
+      console.error('❌ Error requesting notification permissions:', error);
+    }
+  }
+
+  private initializeQueueProcessing(): void {
+    try {
+      // Start queue processing with configured interval
+      notificationQueueService.startProcessing(this.config.queueProcessingInterval);
+      console.log('🔄 Queue processing initialized');
+    } catch (error) {
+      console.error('❌ Error initializing queue processing:', error);
+      throw error;
+    }
+  }
+
+  private setupPeriodicCleanup(): void {
+    // Setup daily cleanup of old notifications
     setInterval(async () => {
       try {
-        const health = await notificationQueueService.getQueueHealth();
-        if (health.status === 'critical') {
-          console.warn('⚠️ Sistema de notificaciones en estado crítico:', health.issues);
+        const deletedCount = await notificationQueueService.cleanupOldNotifications(7);
+        if (deletedCount > 0) {
+          console.log(`🧹 Daily cleanup: removed ${deletedCount} old notifications`);
         }
       } catch (error) {
-        console.error('❌ Error en verificación de salud:', error);
+        console.error('❌ Error in periodic cleanup:', error);
       }
-    }, healthCheckInterval);
-    
-    console.log('✅ Sistema de notificaciones inicializado correctamente');
-  }
-};
+    }, this.config.cleanupInterval);
 
-// Configuración para el cliente
-export const initializeClientNotifications = () => {
-  // Solo en el cliente (navegador)
-  if (typeof window !== 'undefined') {
-    console.log('🔔 Inicializando notificaciones del cliente...');
-    
-    // Solicitar permisos de notificación
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        console.log('🔔 Permisos de notificación:', permission);
-      });
-    }
-    
-    // Registrar Service Worker para notificaciones push (solo si existe el archivo)
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      // Check if service worker file exists before registering
-      fetch('/sw.js', { method: 'HEAD' })
-        .then(response => {
-          if (response.ok) {
-            // Service worker file exists, register it
-            navigator.serviceWorker.register('/sw.js')
-              .then(() => {
-                console.log('📱 Service Worker registrado para notificaciones push');
-              })
-              .catch(error => {
-                console.log('❌ Error registrando Service Worker:', error);
-              });
-          } else {
-            console.log('ℹ️ Service Worker no encontrado, saltando registro');
-          }
-        })
-        .catch(() => {
-          console.log('ℹ️ Service Worker no disponible, saltando registro');
-        });
-    } else {
-      console.log('ℹ️ Service Worker o Push Manager no soportados en este navegador');
-    }
-    
-    console.log('✅ Notificaciones del cliente inicializadas');
+    console.log('🧹 Periodic cleanup scheduled');
   }
-};
+
+  private async validateConfiguration(): Promise<void> {
+    try {
+      // Test queue health
+      const health = await notificationQueueService.getQueueHealth();
+      
+      if (health.status === 'critical') {
+        console.warn('⚠️ Queue health is critical:', health.issues);
+      } else {
+        console.log('✅ Configuration validated successfully');
+      }
+
+      // Log current metrics
+      console.log('📊 Queue metrics:', health.metrics);
+      
+    } catch (error) {
+      console.error('❌ Error validating configuration:', error);
+      // Don't throw here, just log the error
+    }
+  }
+
+  // Get initialization status
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  // Get current configuration
+  getConfig(): NotificationConfig {
+    return { ...this.config };
+  }
+
+  // Update configuration
+  updateConfig(newConfig: Partial<NotificationConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    console.log('⚙️ Notification configuration updated');
+  }
+
+  // Test notification system
+  async testNotificationSystem(): Promise<{
+    browserNotifications: boolean;
+    queueProcessing: boolean;
+    permissions: string;
+  }> {
+    const results = {
+      browserNotifications: false,
+      queueProcessing: false,
+      permissions: 'unknown'
+    };
+
+    try {
+      // Test browser notifications
+      if ('Notification' in window) {
+        results.permissions = Notification.permission;
+        results.browserNotifications = Notification.permission === 'granted';
+      }
+
+      // Test queue processing
+      const health = await notificationQueueService.getQueueHealth();
+      results.queueProcessing = health.status !== 'critical';
+
+      console.log('🧪 Notification system test results:', results);
+      return results;
+
+    } catch (error) {
+      console.error('❌ Error testing notification system:', error);
+      return results;
+    }
+  }
+
+  // Graceful shutdown
+  shutdown(): void {
+    if (!this.initialized) {
+      return;
+    }
+
+    try {
+      notificationQueueService.cleanup();
+      this.initialized = false;
+      console.log('🛑 Notification system shutdown complete');
+    } catch (error) {
+      console.error('❌ Error during notification system shutdown:', error);
+    }
+  }
+}
+
+// Export singleton instance
+export const notificationInitService = new NotificationInitService();
+
+// Auto-initialize in browser environment
+if (typeof window !== 'undefined') {
+  // Initialize after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      notificationInitService.initialize().catch(console.error);
+    });
+  } else {
+    notificationInitService.initialize().catch(console.error);
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    notificationInitService.shutdown();
+  });
+}

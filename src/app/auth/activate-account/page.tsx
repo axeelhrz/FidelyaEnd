@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -18,7 +18,49 @@ import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { socioInvitationService } from '@/services/socio-invitation.service';
 
-export default function ActivateAccountPage() {
+// Loading component for Suspense fallback
+function ActivateAccountSkeleton() {
+  return (
+    <div className="scrollable-container bg-gradient-to-br from-sky-50 via-celestial-50 to-sky-100 min-h-screen relative overflow-hidden">
+      <div className="relative z-10 min-h-screen flex items-center justify-center py-8 px-4">
+        <div className="w-full max-w-md">
+          <div className="mb-8">
+            <div className="w-12 h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
+          </div>
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gray-200 rounded-3xl mx-auto mb-6 animate-pulse"></div>
+            <div className="h-8 bg-gray-200 rounded mb-2 animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main component that uses useSearchParams
+function ActivateAccountContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -338,5 +380,14 @@ export default function ActivateAccountPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main exported component with Suspense boundary
+export default function ActivateAccountPage() {
+  return (
+    <Suspense fallback={<ActivateAccountSkeleton />}>
+      <ActivateAccountContent />
+    </Suspense>
   );
 }

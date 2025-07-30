@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -30,7 +30,35 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function ComercioConfiguracionPage() {
+// Loading component for Suspense fallback
+function ComercioConfiguracionSkeleton() {
+  return (
+    <DashboardLayout
+      activeSection="configuracion"
+      sidebarComponent={(props) => (
+        <ComercioSidebar
+          {...props}
+          onLogoutClick={() => {}}
+        />
+      )}
+    >
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
+            <RefreshCw size={32} className="text-gray-500 animate-spin" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Cargando configuración...
+          </h3>
+          <p className="text-gray-500">Obteniendo preferencias del comercio</p>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+// Main component that uses useSearchParams
+function ComercioConfiguracionContent() {
   const { signOut } = useAuth();
   const { comerciosVinculados, loading, updateComercio } = useComercios();
   // Select the first comercio as an example, adjust as needed
@@ -872,5 +900,14 @@ export default function ComercioConfiguracionPage() {
         </div>
       </motion.div>
     </DashboardLayout>
+  );
+}
+
+// Main exported component with Suspense boundary
+export default function ComercioConfiguracionPage() {
+  return (
+    <Suspense fallback={<ComercioConfiguracionSkeleton />}>
+      <ComercioConfiguracionContent />
+    </Suspense>
   );
 }

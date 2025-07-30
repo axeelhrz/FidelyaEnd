@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,7 +27,41 @@ import { loginSchema, type LoginFormData } from '@/lib/validations/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { EmailVerification } from '@/components/auth/EmailVerification';
 
-export default function LoginPage() {
+// Loading component for Suspense fallback
+function LoginPageSkeleton() {
+  return (
+    <div className="scrollable-container bg-gradient-to-br from-sky-50 via-celestial-50 to-sky-100 min-h-screen relative overflow-hidden">
+      <div className="relative z-10 min-h-screen flex items-center justify-center py-8 px-4">
+        <div className="w-full max-w-md">
+          <div className="mb-8">
+            <div className="w-12 h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
+          </div>
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gray-200 rounded-3xl mx-auto mb-6 animate-pulse"></div>
+            <div className="h-8 bg-gray-200 rounded mb-2 animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+              </div>
+              <div className="h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main login component that uses useSearchParams
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn, loading, error, clearError, resetPassword, checkEmailVerification } = useAuth();
@@ -200,7 +234,6 @@ export default function LoginPage() {
     { icon: CheckCircle, text: 'Verificado', color: 'text-celestial-600', bgColor: 'bg-celestial-50' },
     { icon: Clock, text: 'Acceso 24/7', color: 'text-sky-700', bgColor: 'bg-sky-100' },
   ];
-
 
   return (
     <div className="scrollable-container bg-gradient-to-br from-sky-50 via-celestial-50 to-sky-100 min-h-screen relative overflow-hidden">
@@ -543,5 +576,14 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main exported component with Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageSkeleton />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

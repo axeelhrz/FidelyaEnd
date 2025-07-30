@@ -2,197 +2,118 @@ import { NextRequest, NextResponse } from 'next/server';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-// Webhook handler for delivery confirmations from external services
+// Webhook para recibir eventos de entrega de SendGrid
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { provider } = body;
+    const webhookSecret = process.env.WEBHOOK_SECRET;
+    const signature = request.headers.get('X-Webhook-Signature');
 
-    // Validate webhook signature (implement based on your providers)
-    const isValidSignature = await validateWebhookSignature(request);
-    if (!isValidSignature) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    // Verificar firma del webhook (implementar según el proveedor)
+    if (webhookSecret && signature) {
+      // Aquí implementarías la verificación de la firma
+      // Por ejemplo, para SendGrid sería verificar el hash HMAC
     }
 
-    // Update delivery record based on provider
-    switch (provider) {
-      case 'sendgrid':
-        await handleSendGridWebhook(body);
-        break;
-      case 'twilio':
-        await handleTwilioWebhook(body);
-        break;
-      case 'fcm':
-        await handleFCMWebhook(body);
-        break;
-      default:
-        console.warn(`Unknown provider: ${provider}`);
+    const events = await request.json();
+    
+    if (!Array.isArray(events)) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    console.log(`📥 Received ${events.length} delivery events`);
+
+    for (const event of events) {
+      try {
+        await processDeliveryEvent(event);
+      } catch (error) {
+        console.error('❌ Error processing delivery event:', error);
+      }
+    }
+
+    return NextResponse.json({ success: true, processed: events.length });
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('❌ Webhook error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-async function validateWebhookSignature(request: NextRequest): Promise<boolean> {
-  // Implement signature validation based on provider
-  // This is a simplified example - implement proper validation for each provider
-  
-  const signature = request.headers.get('x-signature') || request.headers.get('x-twilio-signature');
-  
-  if (!signature) {
-    return false;
-  }
-
-  // Add your signature validation logic here
-  // For SendGrid, Twilio, etc.
-  
-  return true; // Simplified for demo
-}
-
-interface SendGridEvent {
-  sg_message_id?: string;
+interface DeliveryEvent {
   event: string;
-  timestamp: number;
+  tracking_id: string;
+  email: string;
+  timestamp?: number;
   reason?: string;
-  [key: string]: unknown;
+  metadata?: Record<string, unknown>;
+  url?: string;
 }
 
-interface SendGridWebhookData {
-  events?: SendGridEvent[];
-  [key: string]: unknown;
-}
-
-async function handleSendGridWebhook(data: SendGridWebhookData) {
-  const events = data.events || [data];
+async function processDeliveryEvent(event: DeliveryEvent) {
+  const { event: eventType, tracking_id, email, timestamp } = event;
   
-  for (const event of events) {
-    const { sg_message_id, event: eventType, timestamp } = event;
-    
-    if (!sg_message_id) continue;
-
-    // Find delivery record by external ID
-    const deliveryRef = doc(db, 'notificationDeliveries', String(sg_message_id));
-    
-    const status = mapSendGridEventToStatus(typeof eventType === 'string' ? eventType : '');
-    const updateData: {
-      status: string;
-      updatedAt: ReturnType<typeof serverTimestamp>;
-      deliveredAt?: Date;
-      failureReason?: string;
-    } = {
-      status,
-      updatedAt: serverTimestamp(),
-    };
-
-    if (eventType === 'delivered') {
-      if (typeof timestamp === 'number') {
-        updateData.deliveredAt = new Date(timestamp * 1000);
-      }
-    } else if (eventType === 'bounce' || eventType === 'dropped') {
-      updateData.failureReason = typeof event.reason === 'string' ? event.reason : 'Email delivery failed';
-    }
-
-    await updateDoc(deliveryRef, updateData);
+  if (!tracking_id) {
+    console.warn('⚠️ Event without tracking_id:', event);
+    return;
   }
-}
 
-interface TwilioWebhookData {
-  MessageSid: string;
-  MessageStatus: string;
-  ErrorCode?: string | number;
-  ErrorMessage?: string;
-  [key: string]: unknown;
-}
-
-async function handleTwilioWebhook(data: TwilioWebhookData) {
-  const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = data;
+  // Buscar el registro de entrega por tracking_id
+  // En un caso real, tendrías que hacer una consulta a Firestore
+  // Por simplicidad, asumimos que el tracking_id contiene el deliveryId
   
-  if (!MessageSid) return;
-
-  const deliveryRef = doc(db, 'notificationDeliveries', MessageSid);
+  const deliveryId = tracking_id.split('_')[0]; // Extraer deliveryId del tracking_id
   
-  const status = mapTwilioStatusToStatus(MessageStatus);
-  const updateData: {
-    status: string;
-    updatedAt: ReturnType<typeof serverTimestamp>;
-    deliveredAt?: Date;
+  if (!deliveryId) {
+    console.warn('⚠️ Could not extract deliveryId from tracking_id:', tracking_id);
+    return;
+  }
+
+  const updates: {
+    status?: string;
+    deliveredAt?: unknown;
     failureReason?: string;
+    metadata?: Record<string, unknown>;
+    updatedAt: unknown;
   } = {
-    status,
     updatedAt: serverTimestamp(),
   };
 
-  if (MessageStatus === 'delivered') {
-    updateData.deliveredAt = new Date();
-  } else if (MessageStatus === 'failed' || MessageStatus === 'undelivered') {
-    updateData.failureReason = ErrorMessage || `SMS delivery failed (${ErrorCode})`;
-  }
-
-  await updateDoc(deliveryRef, updateData);
-}
-
-interface FCMWebhookData {
-  messageId: string;
-  status: string;
-  timestamp: number;
-  error?: string;
-  [key: string]: unknown;
-}
-
-async function handleFCMWebhook(data: FCMWebhookData) {
-  const { messageId, status, timestamp, error } = data;
-  
-  if (!messageId) return;
-
-  const deliveryRef = doc(db, 'notificationDeliveries', messageId);
-  
-  const updateData: {
-    status: string;
-    updatedAt: ReturnType<typeof serverTimestamp>;
-    deliveredAt?: Date;
-    failureReason?: string;
-  } = {
-    status: status === 'success' ? 'delivered' : 'failed',
-    updatedAt: serverTimestamp(),
-  };
-
-  if (status === 'success') {
-    updateData.deliveredAt = new Date(timestamp);
-  } else {
-    updateData.failureReason = error || 'Push notification delivery failed';
-  }
-
-  await updateDoc(deliveryRef, updateData);
-}
-
-function mapSendGridEventToStatus(eventType: string): string {
   switch (eventType) {
-    case 'processed':
     case 'delivered':
-      return 'delivered';
+      updates.status = 'delivered';
+      updates.deliveredAt = serverTimestamp();
+      console.log(`✅ Email delivered: ${email}`);
+      break;
+    
     case 'bounce':
     case 'dropped':
-    case 'spamreport':
-    case 'unsubscribe':
-      return 'failed';
-    default:
-      return 'sent';
+      updates.status = 'failed';
+      updates.failureReason = `Email ${eventType}: ${event.reason || 'Unknown reason'}`;
+      console.log(`❌ Email ${eventType}: ${email}`);
+      break;
+    
+    case 'open':
+      updates.metadata = {
+        ...event.metadata,
+        opened: true,
+        openedAt: timestamp,
+      };
+      console.log(`👀 Email opened: ${email}`);
+      break;
+    
+    case 'click':
+      updates.metadata = {
+        ...event.metadata,
+        clicked: true,
+        clickedAt: timestamp,
+        clickedUrl: event.url,
+      };
+      console.log(`🔗 Email link clicked: ${email} -> ${event.url}`);
+      break;
   }
-}
 
-function mapTwilioStatusToStatus(status: string): string {
-  switch (status) {
-    case 'delivered':
-      return 'delivered';
-    case 'failed':
-    case 'undelivered':
-      return 'failed';
-    case 'sent':
-      return 'sent';
-    default:
-      return 'pending';
+  try {
+    await updateDoc(doc(db, 'notificationDeliveries', deliveryId), updates);
+    console.log(`📝 Updated delivery record ${deliveryId} for event ${eventType}`);
+  } catch (error) {
+    console.error(`❌ Error updating delivery record ${deliveryId}:`, error);
   }
 }

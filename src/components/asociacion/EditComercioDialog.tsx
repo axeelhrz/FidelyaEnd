@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -9,8 +12,12 @@ import {
   Globe,
   Clock,
   FileText,
-  Save,
-  Loader2
+  Loader2,
+  Building,
+  AlertCircle,
+  CheckCircle,
+  Sparkles,
+  Settings
 } from 'lucide-react';
 import type { Comercio } from '@/services/comercio.service';
 
@@ -29,6 +36,7 @@ export const EditComercioDialog: React.FC<EditComercioDialogProps> = ({
   onSubmit,
   loading
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [formData, setFormData] = useState({
     nombreComercio: '',
     categoria: '',
@@ -44,6 +52,12 @@ export const EditComercioDialog: React.FC<EditComercioDialogProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Asegurar que el componente esté montado
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   useEffect(() => {
     if (comercio) {
@@ -105,330 +119,431 @@ export const EditComercioDialog: React.FC<EditComercioDialogProps> = ({
     }
   };
 
-  if (!open) return null;
+  const getFieldValidationState = (fieldName: string) => {
+    if (errors[fieldName]) return 'error';
+    const value = formData[fieldName as keyof typeof formData];
+    if (value && value.toString().length > 0) return 'success';
+    return 'default';
+  };
 
-  return (
+  const getFieldIcon = (fieldName: string) => {
+    const state = getFieldValidationState(fieldName);
+    if (state === 'error') return <AlertCircle className="w-5 h-5 text-red-500" />;
+    if (state === 'success') return <CheckCircle className="w-5 h-5 text-green-500" />;
+    return null;
+  };
+
+  const getFieldClasses = (fieldName: string) => {
+    const state = getFieldValidationState(fieldName);
+    const baseClasses = "w-full px-4 py-3 pl-12 pr-12 border rounded-xl focus:outline-none focus:ring-2 transition-all duration-200";
+    
+    switch (state) {
+      case 'error':
+        return `${baseClasses} border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50`;
+      case 'success':
+        return `${baseClasses} border-green-300 focus:border-green-500 focus:ring-green-200 bg-green-50`;
+      default:
+        return `${baseClasses} border-gray-300 focus:border-blue-500 focus:ring-blue-200 bg-white`;
+    }
+  };
+
+  if (!open || !mounted) return null;
+
+  const modalContent = (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 overflow-y-auto">
-        {/* Backdrop with blur effect */}
+      <div className="fixed inset-0 z-[9999] overflow-hidden">
+        {/* Backdrop con blur */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 backdrop-blur-md bg-white/30"
+          transition={{ duration: 0.3 }}
+          className="absolute inset-0 bg-black/60 backdrop-blur-md"
           onClick={onClose}
         />
 
-        {/* Modal Container */}
-        <div className="flex items-center justify-center min-h-screen p-4">
+        {/* Contenedor del modal */}
+        <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-6 lg:p-8">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.9, y: 50 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: "spring", duration: 0.5 }}
-            className="relative w-full max-w-2xl bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden"
+            exit={{ opacity: 0, scale: 0.9, y: 50 }}
+            transition={{ 
+              type: "spring", 
+              duration: 0.6,
+              bounce: 0.3
+            }}
+            className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 px-8 py-6">
-              <div className="flex items-center justify-between">
+            {/* Header con gradiente */}
+            <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 px-8 py-8">
+              {/* Elementos decorativos */}
+              <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
+                <div className="absolute -top-4 -left-4 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+                <div className="absolute top-8 right-8 w-24 h-24 bg-white/5 rounded-full blur-lg"></div>
+                <div className="absolute bottom-4 left-1/3 w-28 h-28 bg-white/5 rounded-full blur-xl"></div>
+              </div>
+
+              <div className="relative flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                    <Store className="w-6 h-6 text-white" />
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                    <Store className="w-8 h-8 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 className="text-3xl font-bold text-white">
                       Editar Comercio
                     </h2>
-                    <p className="text-blue-100">
+                    <p className="text-blue-100 text-lg">
                       Actualiza la información del comercio
                     </p>
                   </div>
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
+                <button
                   onClick={onClose}
-                  className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white hover:bg-white/30 transition-all duration-200"
+                  disabled={loading}
+                  className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white hover:bg-white/30 transition-all duration-200 disabled:opacity-50 group"
                 >
-                  <X className="w-5 h-5" />
-                </motion.button>
+                  <X className="w-6 h-6 group-hover:rotate-90 transition-transform duration-200" />
+                </button>
               </div>
-              
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12" />
             </div>
 
-            {/* Form Content */}
-            <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* Basic Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
-                    <Store className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900">Información Básica</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Nombre del Comercio *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.nombreComercio}
-                      onChange={(e) => handleInputChange('nombreComercio', e.target.value)}
-                      className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                        errors.nombreComercio ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                      }`}
-                      placeholder="Nombre del comercio"
-                    />
-                    {errors.nombreComercio && (
-                      <p className="mt-1 text-sm text-red-600">{errors.nombreComercio}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Categoría *
-                    </label>
-                    <select
-                      value={formData.categoria}
-                      onChange={(e) => handleInputChange('categoria', e.target.value)}
-                      className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                        errors.categoria ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                      }`}
-                    >
-                      <option value="">Seleccionar categoría</option>
-                      <option value="Restaurante">Restaurante</option>
-                      <option value="Retail">Retail</option>
-                      <option value="Servicios">Servicios</option>
-                      <option value="Salud">Salud</option>
-                      <option value="Educación">Educación</option>
-                      <option value="Entretenimiento">Entretenimiento</option>
-                      <option value="Tecnología">Tecnología</option>
-                      <option value="Otros">Otros</option>
-                    </select>
-                    {errors.categoria && (
-                      <p className="mt-1 text-sm text-red-600">{errors.categoria}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Descripción
-                  </label>
-                  <textarea
-                    value={formData.descripcion}
-                    onChange={(e) => handleInputChange('descripcion', e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                    placeholder="Describe tu comercio..."
-                  />
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-100 to-blue-100 rounded-lg flex items-center justify-center">
-                    <Mail className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900">Información de Contacto</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Email *
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                          errors.email ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                        }`}
-                        placeholder="correo@ejemplo.com"
-                      />
+            {/* Content */}
+            <div className="overflow-y-auto max-h-[calc(95vh-200px)]">
+              <form onSubmit={handleSubmit} className="p-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
+                  {/* Información Personal */}
+                  <div className="space-y-6">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Store className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        Información Básica
+                      </h3>
                     </div>
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-                    )}
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Teléfono
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="tel"
-                        value={formData.telefono}
-                        onChange={(e) => handleInputChange('telefono', e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="+54 11 1234-5678"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Dirección
-                    </label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={formData.direccion}
-                        onChange={(e) => handleInputChange('direccion', e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="Dirección completa"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Sitio Web
-                    </label>
-                    <div className="relative">
-                      <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="url"
-                        value={formData.sitioWeb}
-                        onChange={(e) => handleInputChange('sitioWeb', e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="https://www.ejemplo.com"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900">Información Adicional</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Horario de Atención
-                    </label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={formData.horario}
-                        onChange={(e) => handleInputChange('horario', e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="Lun-Vie 9:00-18:00"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      CUIT
-                    </label>
-                    <div className="relative">
-                      <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={formData.cuit}
-                        onChange={(e) => handleInputChange('cuit', e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="20-12345678-9"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Estado
-                    </label>
-                    <select
-                      value={formData.estado}
-                      onChange={(e) => handleInputChange('estado', e.target.value as 'activo' | 'inactivo' | 'suspendido')}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    >
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                      <option value="suspendido">Suspendido</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Visibilidad
-                    </label>
-                    <div className="flex items-center space-x-3 pt-3">
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.visible}
-                          onChange={(e) => handleInputChange('visible', e.target.checked)}
-                          className="w-5 h-5 text-blue-600 bg-slate-50 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
-                        />
-                        <span className="text-sm text-slate-700">Visible para socios</span>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nombre del Comercio *
                       </label>
+                      <div className="relative">
+                        <Store className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.nombreComercio}
+                          onChange={(e) => handleInputChange('nombreComercio', e.target.value)}
+                          className={getFieldClasses('nombreComercio')}
+                          placeholder="Nombre del comercio"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('nombreComercio')}
+                        </div>
+                      </div>
+                      {errors.nombreComercio && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-1 text-sm text-red-600"
+                        >
+                          {errors.nombreComercio}
+                        </motion.p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Categoría *
+                      </label>
+                      <div className="relative">
+                        <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <select
+                          value={formData.categoria}
+                          onChange={(e) => handleInputChange('categoria', e.target.value)}
+                          className={getFieldClasses('categoria')}
+                        >
+                          <option value="">Seleccionar categoría</option>
+                          <option value="Alimentación">Alimentación</option>
+                          <option value="Librería y Papelería">Librería y Papelería</option>
+                          <option value="Farmacia y Salud">Farmacia y Salud</option>
+                          <option value="Restaurantes y Gastronomía">Restaurantes y Gastronomía</option>
+                          <option value="Retail y Moda">Retail y Moda</option>
+                          <option value="Salud y Belleza">Salud y Belleza</option>
+                          <option value="Deportes y Fitness">Deportes y Fitness</option>
+                          <option value="Tecnología">Tecnología</option>
+                          <option value="Hogar y Decoración">Hogar y Decoración</option>
+                          <option value="Automotriz">Automotriz</option>
+                          <option value="Educación">Educación</option>
+                          <option value="Entretenimiento">Entretenimiento</option>
+                          <option value="Servicios Profesionales">Servicios Profesionales</option>
+                          <option value="Turismo y Viajes">Turismo y Viajes</option>
+                          <option value="Otros">Otros</option>
+                        </select>
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('categoria')}
+                        </div>
+                      </div>
+                      {errors.categoria && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-1 text-sm text-red-600"
+                        >
+                          {errors.categoria}
+                        </motion.p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Descripción
+                      </label>
+                      <div className="relative">
+                        <FileText className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                        <textarea
+                          value={formData.descripcion}
+                          onChange={(e) => handleInputChange('descripcion', e.target.value)}
+                          rows={3}
+                          className="w-full px-4 py-3 pl-12 pr-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white transition-all duration-200 resize-none"
+                          placeholder="Describe tu comercio..."
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Correo Electrónico *
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => handleInputChange('email', e.target.value)}
+                          className={getFieldClasses('email')}
+                          placeholder="correo@ejemplo.com"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('email')}
+                        </div>
+                      </div>
+                      {errors.email && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-1 text-sm text-red-600"
+                        >
+                          {errors.email}
+                        </motion.p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Teléfono
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="tel"
+                          value={formData.telefono}
+                          onChange={(e) => handleInputChange('telefono', e.target.value)}
+                          className={getFieldClasses('telefono')}
+                          placeholder="+54 9 11 1234-5678"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('telefono')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Dirección
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.direccion}
+                          onChange={(e) => handleInputChange('direccion', e.target.value)}
+                          className={getFieldClasses('direccion')}
+                          placeholder="Dirección completa"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('direccion')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Configuración Adicional */}
+                  <div className="space-y-6">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Settings className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        Información Adicional
+                      </h3>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Sitio Web
+                      </label>
+                      <div className="relative">
+                        <Globe className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="url"
+                          value={formData.sitioWeb}
+                          onChange={(e) => handleInputChange('sitioWeb', e.target.value)}
+                          className={getFieldClasses('sitioWeb')}
+                          placeholder="https://www.ejemplo.com"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('sitioWeb')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Horario de Atención
+                      </label>
+                      <div className="relative">
+                        <Clock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.horario}
+                          onChange={(e) => handleInputChange('horario', e.target.value)}
+                          className={getFieldClasses('horario')}
+                          placeholder="Lun-Vie 9:00-18:00"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('horario')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        CUIT
+                      </label>
+                      <div className="relative">
+                        <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.cuit}
+                          onChange={(e) => handleInputChange('cuit', e.target.value)}
+                          className={getFieldClasses('cuit')}
+                          placeholder="20-12345678-9"
+                        />
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('cuit')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estado del Comercio
+                      </label>
+                      <div className="relative">
+                        <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <select
+                          value={formData.estado}
+                          onChange={(e) => handleInputChange('estado', e.target.value as 'activo' | 'inactivo' | 'suspendido')}
+                          className={getFieldClasses('estado')}
+                        >
+                          <option value="activo">✅ Activo - Operativo y visible</option>
+                          <option value="inactivo">⏸️ Inactivo - Temporalmente cerrado</option>
+                          <option value="suspendido">🚫 Suspendido - Acceso bloqueado</option>
+                        </select>
+                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          {getFieldIcon('estado')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Configuración de Visibilidad
+                      </label>
+                      
+                      <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h5 className="font-semibold text-gray-900">Visible para Socios</h5>
+                            <p className="text-sm text-gray-600">Los socios pueden ver este comercio en la aplicación</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.visible}
+                              onChange={(e) => handleInputChange('visible', e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Información del comercio */}
+                    <div className="mt-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+                      <h5 className="font-bold text-green-900 mb-4 flex items-center text-lg">
+                        <CheckCircle className="w-5 h-5 mr-3" />
+                        Información del Comercio
+                      </h5>
+                      <div className="text-sm text-green-800 space-y-2">
+                        <p><strong>Nombre:</strong> {formData.nombreComercio || 'Sin especificar'}</p>
+                        <p><strong>Email:</strong> {formData.email || 'Sin especificar'}</p>
+                        <p><strong>Categoría:</strong> {formData.categoria || 'Sin especificar'}</p>
+                        <p><strong>Estado:</strong> {formData.estado || 'Sin especificar'}</p>
+                        <p><strong>Visible:</strong> {formData.visible ? 'Sí' : 'No'}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </form>
 
-            {/* Footer */}
-            <div className="bg-slate-50 px-8 py-6 border-t border-slate-200">
-              <div className="flex items-center justify-end space-x-4">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  type="button"
-                  onClick={onClose}
-                  className="px-6 py-3 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-all duration-200 font-medium"
-                >
-                  Cancelar
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-5 h-5" />
-                      <span>Guardar Cambios</span>
-                    </>
-                  )}
-                </motion.button>
-              </div>
+                {/* Footer */}
+                <div className="flex justify-end items-center mt-12 pt-8 border-t border-gray-200 space-x-4">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={loading}
+                    className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-all duration-200 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        <span>Guardar Cambios</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </motion.div>
         </div>
       </div>
     </AnimatePresence>
   );
+
+  return createPortal(modalContent, document.body);
 };

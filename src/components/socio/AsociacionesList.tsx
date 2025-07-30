@@ -1,624 +1,644 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Building2, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  AlertTriangle,
-  Star,
-  Calendar,
-  Users,
-  TrendingUp,
-  Shield,
-  Award,
-  Sparkles,
-  Eye,
-  ArrowUpRight,
-  Filter,
-  Search
-} from 'lucide-react';
 import Image from 'next/image';
-import { useSocioProfile } from '@/hooks/useSocioProfile';
-import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
+import {
+  Building2,
+  Users,
+  Gift,
+  Store,
+  MapPin,
+  Phone,
+  Mail,
+  Calendar,
+  Star,
+  Eye,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  ArrowUpRight,
+  Shield,
+  Info,
+  ExternalLink,
+} from 'lucide-react';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/Button';
+import { AsociacionDetailsModal } from './AsociacionDetailsModal';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { navigateToBeneficios } from '@/utils/navigation';
+
+interface Beneficio {
+  id: string;
+  titulo: string;
+  descripcion?: string;
+  descuento?: number;
+  tipoDescuento?: 'porcentaje' | 'monto_fijo';
+  categoria?: string;
+  estado: 'activo' | 'inactivo' | 'vencido';
+  comercioNombre?: string;
+}
+
+interface Comercio {
+  id: string;
+  nombre: string;
+  categoria?: string;
+  estado: 'activo' | 'inactivo' | 'pendiente';
+  logo?: string;
+  beneficiosCount?: number;
+}
 
 interface Asociacion {
   id: string;
   nombre: string;
-  estado: 'activo' | 'vencido' | 'pendiente' | 'inactivo' | 'suspendido';
-  fechaVencimiento?: Date;
-  logo?: string;
   descripcion?: string;
+  logo?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  sitioWeb?: string;
+  estado: 'activo' | 'inactivo' | 'suspendido';
+  fechaVinculacion?: Date | { toDate: () => Date } | null;
+  totalSocios?: number;
+  totalComercios?: number;
+  totalBeneficios?: number;
+  beneficios?: Beneficio[];
+  comercios?: Comercio[];
+  rating?: number;
+  numeroSocio?: string;
+  beneficiosActivos?: number;
+  comerciosActivos?: number;
+  sociosActivos?: number;
 }
 
-interface AsociacionesListProps {
-  asociaciones?: Asociacion[];
-}
-
-function isTimestamp(obj: unknown): obj is { toDate: () => Date } {
-  return !!obj && typeof obj === 'object' && typeof (obj as { toDate?: unknown }).toDate === 'function';
-}
-
-export const AsociacionesList: React.FC<AsociacionesListProps> = ({ 
-  asociaciones: asociacionesProp = [
-    {
-      id: '1',
-      nombre: 'Asociación de Comerciantes Centro',
-      estado: 'activo',
-      fechaVencimiento: new Date('2024-12-31'),
-      descripcion: 'Asociación principal de comerciantes del centro de la ciudad'
-    },
-    {
-      id: '2',
-      nombre: 'Cámara de Comercio Local',
-      estado: 'vencido',
-      fechaVencimiento: new Date('2024-01-15'),
-      descripcion: 'Cámara de comercio e industria local'
-    },
-    {
-      id: '3',
-      nombre: 'Asociación de Servicios Premium',
-      estado: 'activo',
-      fechaVencimiento: new Date('2024-11-30'),
-      descripcion: 'Servicios exclusivos para socios premium'
-    }
-  ]
-}) => {
-  const { asociacionesList: asociacionesFromProfile, loading } = useSocioProfile();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [selectedAsociacion, setSelectedAsociacion] = useState<Asociacion | null>(null);
-
-  const asociacionesToShow = asociacionesFromProfile && asociacionesFromProfile.length > 0 ? asociacionesFromProfile : asociacionesProp;
-
-  // Filter associations based on search and status
-  const filteredAsociaciones = asociacionesToShow
-    .filter((item): item is Asociacion =>
-      typeof item === 'object' &&
-      item !== null &&
-      'nombre' in item &&
-      'estado' in item
-    )
-    .filter((asociacion) => {
-      const matchesSearch = asociacion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (asociacion.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-      const matchesStatus = filterStatus === 'all' || asociacion.estado === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-
-  const getStatusIcon = (estado: Asociacion['estado']) => {
+// Componente de tarjeta de asociación compacta y estética
+const CompactAsociacionCard: React.FC<{
+  asociacion: Asociacion;
+  onViewDetails: (asociacion: Asociacion) => void;
+  onNavigateToBeneficios: () => void;
+}> = ({ asociacion, onViewDetails, onNavigateToBeneficios }) => {
+  const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'activo':
-        return <CheckCircle className="w-4 h-4 text-emerald-500" />;
-      case 'vencido':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'pendiente':
-        return <Clock className="w-4 h-4 text-amber-500" />;
+        return 'text-emerald-700 bg-emerald-50 border-emerald-200';
       case 'inactivo':
-        return <AlertTriangle className="w-4 h-4 text-gray-500" />;
+        return 'text-gray-700 bg-gray-50 border-gray-200';
       case 'suspendido':
-        return <Shield className="w-4 h-4 text-orange-500" />;
+        return 'text-red-700 bg-red-50 border-red-200';
       default:
-        return null;
+        return 'text-gray-700 bg-gray-50 border-gray-200';
     }
   };
 
-  const getStatusGradient = (estado: Asociacion['estado']) => {
+  const getEstadoIcon = (estado: string) => {
     switch (estado) {
       case 'activo':
-        return 'from-emerald-500 to-teal-600';
-      case 'vencido':
-        return 'from-red-500 to-rose-600';
-      case 'pendiente':
-        return 'from-amber-500 to-orange-600';
+        return <CheckCircle size={12} className="text-emerald-500" />;
       case 'inactivo':
-        return 'from-gray-500 to-gray-600';
+        return <Clock size={12} className="text-gray-500" />;
       case 'suspendido':
-        return 'from-orange-500 to-red-600';
+        return <XCircle size={12} className="text-red-500" />;
       default:
-        return 'from-gray-500 to-gray-600';
+        return <AlertCircle size={12} className="text-gray-500" />;
     }
   };
 
-  const getStatusText = (estado: Asociacion['estado']) => {
-    switch (estado) {
-      case 'activo':
-        return 'Activo';
-      case 'vencido':
-        return 'Vencido';
-      case 'pendiente':
-        return 'Pendiente';
-      case 'inactivo':
-        return 'Inactivo';
-      case 'suspendido':
-        return 'Suspendido';
-      default:
-        return '';
-    }
-  };
-
-  const getStatusDescription = (estado: Asociacion['estado'], fechaVencimiento?: Date) => {
-    switch (estado) {
-      case 'activo':
-        if (fechaVencimiento) {
-          return `Vence: ${format(fechaVencimiento, 'dd/MM/yyyy', { locale: es })}`;
-        }
-        return 'Socio activo con todos los beneficios';
-      case 'vencido':
-        if (fechaVencimiento) {
-          return `Venció: ${format(fechaVencimiento, 'dd/MM/yyyy', { locale: es })}`;
-        }
-        return 'Socio vencido - Renovar para acceder';
-      case 'pendiente':
-        return 'Activación pendiente - Contactar administrador';
-      case 'inactivo':
-        return 'Socio inactivo - Sin acceso a beneficios';
-      case 'suspendido':
-        return 'Socio suspendido - Contactar soporte';
-      default:
-        return '';
-    }
-  };
-
-  const getAsociacionColor = (nombre: string) => {
-    const colors = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444'];
-    const index = nombre.length % colors.length;
-    return colors[index];
-  };
-
-  const isExpiringSoon = (fechaVencimiento?: Date) => {
-    if (!fechaVencimiento) return false;
-    const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    return fechaVencimiento <= thirtyDaysFromNow && fechaVencimiento > now;
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
-
-  if (loading) {
-    return <LoadingSkeleton className="h-64" />;
-  }
+  // Calcular estadísticas reales
+  const beneficiosActivos = asociacion.beneficios?.filter(b => b.estado === 'activo').length || 0;
+  const comerciosActivos = asociacion.comercios?.filter(c => c.estado === 'activo').length || 0;
+  const totalSocios = asociacion.sociosActivos || asociacion.totalSocios || 0;
 
   return (
-    <div className="relative">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-sky-50/50 via-white to-celestial-50/30 rounded-3xl"></div>
-      <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-sky-100/20 to-transparent rounded-full blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-celestial-100/20 to-transparent rounded-full blur-3xl"></div>
+    <motion.div
+      className="bg-white rounded-xl border border-gray-200 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden max-w-sm"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2, scale: 1.02 }}
+    >
+      {/* Header con logo y estado */}
+      <div className="relative p-4 pb-2">
+        <div className="absolute top-3 right-3">
+          <div className={cn(
+            "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
+            getEstadoColor(asociacion.estado)
+          )}>
+            {getEstadoIcon(asociacion.estado)}
+            <span>Activo</span>
+          </div>
+        </div>
 
-      <motion.div
-        className="relative z-10"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {/* Header */}
-        <motion.div 
-          variants={itemVariants}
-          className="mb-8"
-        >
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-8">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-sky-500 to-celestial-600 rounded-3xl flex items-center justify-center shadow-lg">
-                  <Building2 className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-1">Mis Asociaciones</h3>
-                  <p className="text-gray-600">Gestiona tu membresía y beneficios</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl px-4 py-2 border border-emerald-100/50">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span className="text-emerald-700 font-medium text-sm">
-                      {filteredAsociaciones.filter((a: Asociacion) => a.estado === 'activo').length} Activas
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div className="flex items-start gap-3">
+          {/* Logo */}
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
+            {asociacion.logo ? (
+              <Image
+                src={asociacion.logo}
+                alt={asociacion.nombre}
+                width={48}
+                height={48}
+                className="w-full h-full object-cover rounded-xl"
+                style={{ objectFit: 'cover', borderRadius: '0.75rem' }}
+                unoptimized={true}
+              />
+            ) : (
+              asociacion.nombre.charAt(0).toUpperCase()
+            )}
+          </div>
 
-            {/* Search and Filter */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar asociaciones..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-300 transition-all duration-200"
-                />
-              </div>
+          {/* Información básica */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1">
+              {asociacion.nombre}
+            </h3>
+            {asociacion.descripcion && (
+              <p className="text-gray-600 text-sm line-clamp-2 mb-2">
+                {asociacion.descripcion}
+              </p>
+            )}
+            
+            {/* Badges de membresía */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {asociacion.numeroSocio && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 rounded-md border border-blue-200">
+                  <Shield size={10} className="text-blue-600" />
+                  <span className="text-xs font-semibold text-blue-700">
+                    #{asociacion.numeroSocio}
+                  </span>
+                </div>
+              )}
               
-              <div className="relative">
-                <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="pl-12 pr-8 py-3 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-300 transition-all duration-200 appearance-none cursor-pointer"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="activo">Activo</option>
-                  <option value="vencido">Vencido</option>
-                  <option value="pendiente">Pendiente</option>
-                  <option value="inactivo">Inactivo</option>
-                  <option value="suspendido">Suspendido</option>
-                </select>
-              </div>
+              {asociacion.fechaVinculacion && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-purple-50 rounded-md border border-purple-200">
+                  <Calendar size={10} className="text-purple-600" />
+                  <span className="text-xs font-semibold text-purple-700">
+                    {format(
+                      typeof asociacion.fechaVinculacion === 'object' && asociacion.fechaVinculacion !== null && 'toDate' in asociacion.fechaVinculacion
+                        ? asociacion.fechaVinculacion.toDate()
+                        : (asociacion.fechaVinculacion as Date),
+                      'MMM yyyy',
+                      { locale: es }
+                    )}
+                  </span>
+                </div>
+              )}
+              
+              {asociacion.rating && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">
+                  <Star size={10} className="text-amber-600 fill-current" />
+                  <span className="text-xs font-semibold text-amber-700">
+                    {asociacion.rating.toFixed(1)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-        </motion.div>
+        </div>
+      </div>
 
-        {/* Associations List */}
-        <motion.div 
-          variants={itemVariants}
-          className="space-y-4"
-        >
-          <AnimatePresence>
-            {filteredAsociaciones.map((asociacion: Asociacion, index: number) => (
-              <motion.div
-                key={asociacion.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -5, scale: 1.02 }}
-                className="group relative overflow-hidden"
-              >
-                {/* Card Background */}
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20"></div>
-                <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-gray-50/30 rounded-3xl"></div>
-                
-                {/* Shine Effect */}
-                <div className="absolute inset-0 overflow-hidden rounded-3xl">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                    initial={{ x: '-100%' }}
-                    whileHover={{ x: '100%' }}
-                    transition={{ duration: 0.6, ease: "easeInOut" }}
-                  />
-                </div>
-
-                {/* Expiring Soon Badge */}
-                {asociacion.estado === 'activo' && isExpiringSoon(
-                  asociacion.fechaVencimiento && isTimestamp(asociacion.fechaVencimiento)
-                    ? asociacion.fechaVencimiento.toDate()
-                    : asociacion.fechaVencimiento
-                ) && (
-                  <motion.div
-                    className="absolute top-4 right-4 z-20"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center space-x-1 shadow-lg animate-pulse">
-                      <Clock className="w-3 h-3" />
-                      <span>POR VENCER</span>
-                    </div>
-                  </motion.div>
-                )}
-
-                <div className="relative z-10 p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 flex-1 min-w-0">
-                      {/* Logo/Avatar */}
-                      <div className="relative">
-                        <div 
-                          className="w-16 h-16 rounded-3xl flex items-center justify-center text-white font-bold text-xl shadow-lg"
-                          style={{ 
-                            background: `linear-gradient(135deg, ${getAsociacionColor(asociacion.nombre)}, ${getAsociacionColor(asociacion.nombre)}dd)` 
-                          }}
-                        >
-                          {asociacion.logo ? (
-                            <Image
-                              src={asociacion.logo}
-                              alt={asociacion.nombre}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 object-contain"
-                            />
-                          ) : (
-                            asociacion.nombre.charAt(0)
-                          )}
-                        </div>
-                        
-                        {/* Status Indicator */}
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg">
-                          {getStatusIcon(asociacion.estado)}
-                        </div>
-                      </div>
-
-                      {/* Association Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-bold text-gray-900 text-lg truncate">
-                            {asociacion.nombre}
-                          </h4>
-                          {asociacion.estado === 'activo' && (
-                            <Star className="w-4 h-4 text-amber-500 fill-current" />
-                          )}
-                        </div>
-                        
-                        <p className="text-sm text-gray-600 mb-2">
-                          {getStatusDescription(
-                            asociacion.estado,
-                            asociacion.fechaVencimiento && isTimestamp(asociacion.fechaVencimiento)
-                              ? asociacion.fechaVencimiento.toDate()
-                              : asociacion.fechaVencimiento
-                          )}
-                        </p>
-                        
-                        {asociacion.descripcion && (
-                          <p className="text-xs text-gray-500 line-clamp-1">
-                            {asociacion.descripcion}
-                          </p>
-                        )}
-
-                        {/* Meta Info */}
-                        <div className="flex items-center space-x-4 mt-3">
-                          <div className="flex items-center space-x-1 text-xs text-gray-500">
-                            <Calendar className="w-3 h-3" />
-                            <span>
-                              {asociacion.fechaVencimiento && isTimestamp(asociacion.fechaVencimiento)
-                                ? format(asociacion.fechaVencimiento.toDate(), 'MMM yyyy', { locale: es })
-                                : asociacion.fechaVencimiento
-                                ? format(asociacion.fechaVencimiento, 'MMM yyyy', { locale: es })
-                                : 'Sin fecha'}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-1 text-xs text-gray-500">
-                            <Users className="w-3 h-3" />
-                            <span>Socio #{asociacion.id}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status Badge and Actions */}
-                    <div className="flex items-center space-x-3">
-                      <motion.div
-                        className={`bg-gradient-to-r ${getStatusGradient(asociacion.estado)} text-white px-4 py-2 rounded-2xl text-sm font-bold flex items-center space-x-2 shadow-lg`}
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        {getStatusIcon(asociacion.estado)}
-                        <span>{getStatusText(asociacion.estado)}</span>
-                      </motion.div>
-
-                      <div className="flex space-x-2">
-                        <motion.button
-                          className="w-10 h-10 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl flex items-center justify-center text-gray-600 hover:text-sky-600 transition-colors"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setSelectedAsociacion(asociacion)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </motion.button>
-                        
-                        <motion.button
-                          className="w-10 h-10 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl flex items-center justify-center text-gray-600 hover:text-sky-600 transition-colors"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <ArrowUpRight className="w-4 h-4" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Empty State */}
-        {filteredAsociaciones.length === 0 && (
-          <motion.div
-            variants={itemVariants}
-            className="relative"
-          >
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20"></div>
-            <div className="relative z-10 text-center py-16">
-              <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Building2 className="w-12 h-12 text-gray-400" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-2">
-                {searchTerm || filterStatus !== 'all' ? 'No se encontraron asociaciones' : 'No tienes asociaciones'}
-              </h4>
-              <p className="text-gray-600 max-w-md mx-auto">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Intenta ajustar los filtros de búsqueda'
-                  : 'Contacta con tu administrador para obtener acceso a una asociación y comenzar a disfrutar de los beneficios.'
-                }
-              </p>
+      {/* Estadísticas */}
+      <div className="px-4 pb-3">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="text-center bg-blue-50 p-2 rounded-lg border border-blue-200">
+            <div className="w-6 h-6 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-1">
+              <Users size={12} className="text-white" />
             </div>
-          </motion.div>
-        )}
-
-        {/* Summary Stats */}
-        {filteredAsociaciones.length > 0 && (
-          <motion.div
-            variants={itemVariants}
-            className="mt-8"
-          >
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20"></div>
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-teal-50/30 rounded-3xl"></div>
-            
-            <div className="relative z-10 p-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <Award className="w-6 h-6 text-emerald-600" />
-                  <h4 className="text-xl font-bold text-gray-900">Resumen de Membresías</h4>
-                </div>
-                <Sparkles className="w-6 h-6 text-celestial-500" />
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <CheckCircle className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="text-3xl font-bold text-emerald-600 mb-1">
-                    {asociacionesToShow
-                      .filter((item): item is Asociacion =>
-                        typeof item === 'object' &&
-                        item !== null &&
-                        'nombre' in item &&
-                        'estado' in item
-                      )
-                      .filter((a) => a.estado === 'activo').length}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Activas</div>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <XCircle className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="text-3xl font-bold text-red-600 mb-1">
-                    {asociacionesToShow
-                      .filter((item): item is Asociacion =>
-                        typeof item === 'object' &&
-                        item !== null &&
-                        'nombre' in item &&
-                        'estado' in item
-                      )
-                      .filter((a) => a.estado === 'vencido').length}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Vencidas</div>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <Clock className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="text-3xl font-bold text-amber-600 mb-1">
-                    {asociacionesToShow
-                      .filter((item): item is Asociacion =>
-                        typeof item === 'object' &&
-                        item !== null &&
-                        'nombre' in item &&
-                        'estado' in item
-                      )
-                      .filter((a) => a.estado === 'pendiente').length}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Pendientes</div>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-sky-500 to-celestial-600 rounded-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <TrendingUp className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="text-3xl font-bold text-sky-600 mb-1">
-                    {asociacionesToShow.length}
-                  </div>
-                  <div className="text-sm text-gray-600 font-medium">Total</div>
-                </div>
-              </div>
+            <div className="text-sm font-bold text-blue-700">{totalSocios}</div>
+            <div className="text-xs text-blue-600">Socios</div>
+          </div>
+          
+          <div className="text-center bg-green-50 p-2 rounded-lg border border-green-200">
+            <div className="w-6 h-6 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-1">
+              <Store size={12} className="text-white" />
             </div>
-          </motion.div>
-        )}
-      </motion.div>
+            <div className="text-sm font-bold text-green-700">{comerciosActivos}</div>
+            <div className="text-xs text-green-600">Comercios</div>
+          </div>
+          
+          <div className="text-center bg-purple-50 p-2 rounded-lg border border-purple-200">
+            <div className="w-6 h-6 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-1">
+              <Gift size={12} className="text-white" />
+            </div>
+            <div className="text-sm font-bold text-purple-700">{beneficiosActivos}</div>
+            <div className="text-xs text-purple-600">Beneficios</div>
+          </div>
+        </div>
+      </div>
 
-      {/* Detail Modal */}
-      <AnimatePresence>
-        {selectedAsociacion && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+      {/* Beneficios destacados - Solo si hay beneficios reales */}
+      {asociacion.beneficios && asociacion.beneficios.length > 0 && (
+        <div className="px-4 pb-3">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-200">
+            <h4 className="text-xs font-bold text-gray-900 mb-2 flex items-center gap-1">
+              <Gift size={10} className="text-purple-600" />
+              Beneficios Destacados
+            </h4>
+            <div className="space-y-1">
+              {asociacion.beneficios.filter(b => b.estado === 'activo').slice(0, 2).map((beneficio) => (
+                <div key={beneficio.id} className="bg-white rounded-md p-2 border border-purple-200">
+                  <div className="flex items-start justify-between">
+                    <h5 className="font-medium text-gray-900 text-xs line-clamp-1 flex-1">
+                      {beneficio.titulo}
+                    </h5>
+                    {beneficio.descuento && (
+                      <div className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">
+                        {beneficio.tipoDescuento === 'porcentaje' ? `${beneficio.descuento}%` : `$${beneficio.descuento}`}
+                      </div>
+                    )}
+                  </div>
+                  {beneficio.comercioNombre && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Store size={8} className="text-gray-400" />
+                      <span className="text-xs text-gray-600">{beneficio.comercioNombre}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Información de contacto - Solo si hay información real */}
+      {(asociacion.email || asociacion.telefono || asociacion.direccion) && (
+        <div className="px-4 pb-3">
+          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+            <h4 className="text-xs font-bold text-gray-900 mb-2">Contacto</h4>
+            <div className="space-y-1">
+              {asociacion.email && (
+                <div className="flex items-center gap-1.5">
+                  <Mail size={10} className="text-gray-400" />
+                  <span className="text-xs text-gray-600 truncate">{asociacion.email}</span>
+                </div>
+              )}
+              {asociacion.telefono && (
+                <div className="flex items-center gap-1.5">
+                  <Phone size={10} className="text-gray-400" />
+                  <span className="text-xs text-gray-600">{asociacion.telefono}</span>
+                </div>
+              )}
+              {asociacion.direccion && (
+                <div className="flex items-center gap-1.5">
+                  <MapPin size={10} className="text-gray-400" />
+                  <span className="text-xs text-gray-600 line-clamp-1">{asociacion.direccion}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Botones de acción */}
+      <div className="p-4 pt-0">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Eye size={12} />}
+            onClick={() => onViewDetails(asociacion)}
+            className="flex-1 text-xs h-8"
           >
-            <motion.div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedAsociacion(null)}
-            />
-            
-            <motion.div
-              className="relative bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 max-w-md w-full"
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            Detalles
+          </Button>
+          
+          {asociacion.sitioWeb && (
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<ExternalLink size={12} />}
+              onClick={() => window.open(asociacion.sitioWeb, '_blank')}
+              className="text-xs h-8"
             >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Detalles de Asociación</h3>
-                  <motion.button
-                    className="w-8 h-8 bg-gray-100/80 backdrop-blur-sm rounded-xl flex items-center justify-center text-gray-600 hover:text-gray-900"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedAsociacion(null)}
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </motion.button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <div 
-                      className="w-16 h-16 rounded-3xl flex items-center justify-center text-white font-bold text-xl shadow-lg"
-                      style={{ 
-                        background: `linear-gradient(135deg, ${getAsociacionColor(selectedAsociacion.nombre)}, ${getAsociacionColor(selectedAsociacion.nombre)}dd)` 
-                      }}
-                    >
-                      {selectedAsociacion.nombre.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-lg">{selectedAsociacion.nombre}</h4>
-                      <p className="text-sm text-gray-600">{selectedAsociacion.descripcion}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-4 border border-sky-100/50">
-                      <h5 className="font-semibold text-sky-900 mb-1">Estado</h5>
-                      <div className={`inline-flex items-center space-x-1 bg-gradient-to-r ${getStatusGradient(selectedAsociacion.estado)} text-white px-3 py-1 rounded-xl text-sm font-bold`}>
-                        {getStatusIcon(selectedAsociacion.estado)}
-                        <span>{getStatusText(selectedAsociacion.estado)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-4 border border-emerald-100/50">
-                      <h5 className="font-semibold text-emerald-900 mb-1">Vencimiento</h5>
-                      <p className="text-sm text-emerald-700 font-medium">
-                        {selectedAsociacion.fechaVencimiento && isTimestamp(selectedAsociacion.fechaVencimiento)
-                          ? format(selectedAsociacion.fechaVencimiento.toDate(), 'dd/MM/yyyy', { locale: es })
-                          : selectedAsociacion.fechaVencimiento
-                          ? format(selectedAsociacion.fechaVencimiento, 'dd/MM/yyyy', { locale: es })
-                          : 'Sin fecha'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+              Web
+            </Button>
+          )}
+          
+          <Button
+            size="sm"
+            leftIcon={<ArrowUpRight size={12} />}
+            onClick={onNavigateToBeneficios}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-xs h-8"
+          >
+            Beneficios
+          </Button>
+        </div>
+      </div>
+    </motion.div>
   );
 };
+
+export const AsociacionesList: React.FC = () => {
+  const { user } = useAuth();
+  const [asociaciones, setAsociaciones] = useState<Asociacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAsociacion, setSelectedAsociacion] = useState<Asociacion | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Función para cargar datos completos de la asociación
+  interface SocioData {
+    id: string;
+    asociacionId: string;
+    fechaVinculacion?: Date | { toDate: () => Date } | null;
+    numeroSocio?: string;
+    estado?: string;
+    email?: string;
+  }
+  
+  const loadCompleteAsociacionData = useCallback(async (asociacionId: string, socioData: SocioData) => {
+    try {
+      // 1. Obtener información básica de la asociación
+      const asociacionRef = doc(db, 'asociaciones', asociacionId);
+      const asociacionDoc = await getDoc(asociacionRef);
+
+      if (!asociacionDoc.exists()) {
+        return null;
+      }
+
+      const asociacionData = asociacionDoc.data();
+
+      // 2. Obtener estadísticas en paralelo
+      const [sociosSnapshot, comerciosSnapshot, beneficiosSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'socios'), where('asociacionId', '==', asociacionId))),
+        getDocs(query(collection(db, 'comercios'), where('asociacionId', '==', asociacionId))),
+        getDocs(query(collection(db, 'beneficios'), where('asociacionId', '==', asociacionId)))
+      ]);
+
+      // 3. Procesar beneficios con información detallada
+      const beneficios: Beneficio[] = beneficiosSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          titulo: data.titulo || data.nombre || 'Beneficio',
+          descripcion: data.descripcion,
+          descuento: data.descuento || data.porcentajeDescuento || data.montoDescuento,
+          tipoDescuento: data.tipoDescuento || (data.porcentajeDescuento ? 'porcentaje' : 'monto_fijo'),
+          categoria: data.categoria,
+          estado: data.estado || 'activo',
+          comercioNombre: data.comercioNombre
+        };
+      });
+
+      // 4. Procesar comercios con conteo de beneficios
+      const comercios: Comercio[] = comerciosSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const comercioBeneficios = beneficios.filter(b => b.comercioNombre === data.nombre);
+        
+        return {
+          id: doc.id,
+          nombre: data.nombre || 'Comercio',
+          categoria: data.categoria,
+          estado: data.estado || 'activo',
+          logo: data.logo,
+          beneficiosCount: comercioBeneficios.length
+        };
+      });
+
+      // 5. Calcular estadísticas detalladas
+      const beneficiosActivos = beneficios.filter(b => b.estado === 'activo').length;
+      const comerciosActivos = comercios.filter(c => c.estado === 'activo').length;
+      const sociosActivos = sociosSnapshot.docs.filter(doc => {
+        const data = doc.data();
+        return data.estado === 'activo';
+      }).length;
+
+      // 6. Construir objeto completo de asociación
+      const asociacionCompleta: Asociacion = {
+        id: asociacionDoc.id,
+        nombre: asociacionData.nombre || 'Mi Asociación',
+        descripcion: asociacionData.descripcion,
+        logo: asociacionData.logo,
+        email: asociacionData.email,
+        telefono: asociacionData.telefono,
+        direccion: asociacionData.direccion,
+        sitioWeb: asociacionData.sitioWeb,
+        estado: asociacionData.estado || 'activo',
+        fechaVinculacion: socioData.fechaVinculacion,
+        totalSocios: sociosSnapshot.size,
+        totalComercios: comerciosSnapshot.size,
+        totalBeneficios: beneficiosSnapshot.size,
+        beneficios: beneficios,
+        comercios: comercios,
+        rating: asociacionData.rating,
+        numeroSocio: socioData.numeroSocio,
+        beneficiosActivos,
+        comerciosActivos,
+        sociosActivos
+      };
+
+      return asociacionCompleta;
+    } catch (error) {
+      console.error('Error cargando datos completos de asociación:', error);
+      return null;
+    }
+  }, []);
+
+  // Cargar asociaciones del usuario
+  useEffect(() => {
+    const loadUserAsociaciones = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // 1. Buscar el socio en la colección socios
+        let socioData = null;
+        
+        // Primero intentar por UID
+        try {
+          const socioRef = doc(db, 'socios', user.uid);
+          const socioDoc = await getDoc(socioRef);
+          if (socioDoc.exists()) {
+            socioData = { ...(socioDoc.data() as SocioData), id: socioDoc.id };
+          }
+        } catch {
+          console.log('No se encontró socio por UID, buscando por email...');
+        }
+
+        // Si no se encontró por UID, buscar por email
+        if (!socioData) {
+          const socioQuery = query(
+            collection(db, 'socios'),
+            where('email', '==', user.email?.toLowerCase())
+          );
+          const socioSnapshot = await getDocs(socioQuery);
+          
+          if (!socioSnapshot.empty) {
+            const doc = socioSnapshot.docs[0];
+            socioData = { ...(doc.data() as SocioData), id: doc.id };
+          }
+        }
+
+        if (!socioData || !socioData.asociacionId) {
+          setAsociaciones([]);
+          return;
+        }
+
+        // 2. Cargar datos completos de la asociación
+        const asociacionCompleta = await loadCompleteAsociacionData(socioData.asociacionId, socioData);
+        
+        if (asociacionCompleta) {
+          setAsociaciones([asociacionCompleta]);
+        } else {
+          setAsociaciones([]);
+        }
+
+      } catch (err) {
+        console.error('Error cargando asociaciones del usuario:', err);
+        setError('Error al cargar tus asociaciones');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserAsociaciones();
+  }, [user, loadCompleteAsociacionData]);
+
+  // Handlers
+  const handleViewDetails = useCallback((asociacion: Asociacion) => {
+    setSelectedAsociacion(asociacion);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setSelectedAsociacion(null);
+  }, []);
+
+  const handleNavigateToBeneficios = useCallback(() => {
+    // Cerrar modal si está abierto
+    if (isModalOpen) {
+      setIsModalOpen(false);
+      setSelectedAsociacion(null);
+    }
+    
+    // Navegar a la pestaña de beneficios usando la función helper
+    navigateToBeneficios();
+  }, [isModalOpen]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <motion.div 
+          className="text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Cargando asociaciones</h3>
+          <p className="text-gray-600">Obteniendo información de Firebase...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <motion.div 
+          className="text-center max-w-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle size={24} className="text-red-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Error al cargar asociaciones</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()} leftIcon={<RefreshCw size={16} />}>
+            Reintentar
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (asociaciones.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <motion.div
+          className="text-center max-w-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Building2 size={32} className="text-gray-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Sin asociaciones vinculadas</h3>
+          <p className="text-gray-600 mb-6">
+            Actualmente no perteneces a ninguna asociación. Contacta con una asociación para solicitar tu vinculación.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-blue-700 font-semibold mb-2">
+                            <Info size={16} />
+              ¿Cómo unirme a una asociación?
+            </div>
+            <p className="text-blue-600 text-sm">
+              Contacta directamente con la asociación de tu interés. Ellos podrán vincularte a su sistema de beneficios y servicios exclusivos.
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Content with associations
+  return (
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Mis Asociaciones</h2>
+            <p className="text-gray-600">
+              {asociaciones.length} asociación{asociaciones.length !== 1 ? 'es' : ''} vinculada{asociaciones.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<RefreshCw size={16} />}
+            onClick={() => window.location.reload()}
+          >
+            Actualizar
+          </Button>
+        </div>
+
+        {/* Associations Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {asociaciones.map((asociacion) => (
+              <CompactAsociacionCard
+                key={asociacion.id}
+                asociacion={asociacion}
+                onViewDetails={handleViewDetails}
+                onNavigateToBeneficios={handleNavigateToBeneficios}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Modal de detalles */}
+      {selectedAsociacion && (
+        <AsociacionDetailsModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          asociacion={selectedAsociacion}
+          onNavigateToBeneficios={handleNavigateToBeneficios}
+        />
+      )}
+    </>
+  );
+};
+
+export default AsociacionesList;

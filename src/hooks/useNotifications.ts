@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import type {
   Notification as NotificationType,
   NotificationFormData,
   NotificationFilters,
   NotificationStats,
-  NotificationTemplate,
 } from '@/types/notification';
 import {
   subscribeToNotifications,
@@ -23,6 +22,16 @@ import {
 } from '@/utils/firestore/notifications';
 import { notificationService } from '@/services/notifications.service';
 import { notificationQueueService } from '@/services/notification-queue.service';
+
+// Audio context for notification sounds
+let audioContext: AudioContext | null = null;
+
+// Type declaration for webkit audio context
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
@@ -49,126 +58,231 @@ export const useNotifications = () => {
     totalProcessed: 0,
     averageProcessingTime: 0,
     successRate: 0,
+    throughputPerHour: 0,
   });
+  
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const [newNotificationCount, setNewNotificationCount] = useState(0);
   const previousNotificationIds = useRef<Set<string>>(new Set());
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
 
-  // Función para reproducir sonido de notificación usando Web Audio API
-  const playNotificationSound = useCallback(() => {
+  // Initialize audio context
+  const initAudioContext = useCallback(() => {
+    if (!audioContext && typeof window !== 'undefined') {
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext || AudioContext)();
+      } catch (error) {
+        console.warn('Audio context not supported:', error);
+      }
+    }
+  }, []);
+
+  // Enhanced notification sound with Web Audio API
+  const playNotificationSound = useCallback((priority: string = 'medium') => {
+    if (!soundEnabled) return;
+    
+    initAudioContext();
+    
     try {
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.2);
-      
+      if (audioContext) {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Different sounds for different priorities
+        const frequencies = {
+          low: [400, 300],
+          medium: [600, 500],
+          high: [800, 600],
+          urgent: [1000, 800, 600]
+        };
+        
+        const freqs = frequencies[priority as keyof typeof frequencies] || frequencies.medium;
+        
+        freqs.forEach((freq, index) => {
+          setTimeout(() => {
+            if (audioContext) {
+              const osc = audioContext.createOscillator();
+              const gain = audioContext.createGain();
+              
+              osc.connect(gain);
+              gain.connect(audioContext.destination);
+              
+              osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+              gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+              
+              osc.start(audioContext.currentTime);
+              osc.stop(audioContext.currentTime + 0.2);
+            }
+          }, index * 150);
+        });
+      }
     } catch {
+      // Fallback to simple audio
       try {
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
         audio.volume = 0.3;
         audio.play().catch(() => {});
       } catch {}
     }
-  }, []);
+  }, [soundEnabled, initAudioContext]);
 
-  // Función para mostrar notificación del navegador
+  // Enhanced browser notification with better formatting
   const showBrowserNotification = useCallback((notification: NotificationType) => {
     if ('Notification' in window && Notification.permission === 'granted') {
-      const browserNotification = new Notification(notification.title, {
+      const options: NotificationOptions = {
         body: notification.message,
         icon: '/favicon.ico',
         badge: '/favicon.ico',
         tag: notification.id,
         requireInteraction: notification.priority === 'urgent',
         silent: false,
-      });
+        data: {
+          notificationId: notification.id,
+          actionUrl: notification.actionUrl,
+          type: notification.type,
+          priority: notification.priority,
+        },
+      };
 
+      // Action buttons are not supported in NotificationOptions type in most browsers, so skip adding them.
+
+      const browserNotification = new Notification(notification.title, options);
+
+      // Auto-close non-urgent notifications
       if (notification.priority !== 'urgent') {
         setTimeout(() => {
           browserNotification.close();
-        }, 5000);
+        }, 8000);
       }
 
+      // Handle clicks
       browserNotification.onclick = () => {
         window.focus();
         if (notification.actionUrl) {
-          window.location.href = notification.actionUrl;
+          window.open(notification.actionUrl, '_blank');
         }
         browserNotification.close();
       };
+
+      // Handle action clicks (if supported)
+      if ('addEventListener' in browserNotification) {
+        browserNotification.addEventListener('notificationclick', (event: Event) => {
+          // Type assertion for NotificationEvent if available
+          const notificationEvent = event as unknown as { action?: string };
+          if (notificationEvent.action === 'view' && notification.actionUrl) {
+            window.open(notification.actionUrl, '_blank');
+          }
+          browserNotification.close();
+        });
+      }
     }
   }, []);
 
-  // Solicitar permisos de notificación
+  // Request notification permission with better UX
   const requestNotificationPermission = useCallback(async () => {
     if ('Notification' in window && Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      return permission === 'granted';
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          toast.success('Notificaciones del navegador activadas');
+          return true;
+        } else {
+          toast.error('Permisos de notificación denegados');
+          return false;
+        }
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        return false;
+      }
     }
     return Notification.permission === 'granted';
   }, []);
 
-  // Suscribirse a notificaciones en tiempo real
+  // Enhanced subscription with better error handling
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     setError(null);
 
-    requestNotificationPermission();
+    const setupSubscription = async () => {
+      try {
+        // Request permissions if needed
+        await requestNotificationPermission();
 
-    try {
-      const unsubscribe = subscribeToNotifications(
-        (newNotifications) => {
-          if (!mounted) return;
+        const unsubscribe = subscribeToNotifications(
+          (newNotifications) => {
+            if (!mounted) return;
 
-          const currentIds = new Set(newNotifications.map(n => n.id));
-          const newIds = [...currentIds].filter(id => !previousNotificationIds.current.has(id));
-          
-          if (newIds.length > 0 && previousNotificationIds.current.size > 0) {
-            setNewNotificationCount(prev => prev + newIds.length);
+            const currentIds = new Set(newNotifications.map(n => n.id));
+            const newIds = [...currentIds].filter(id => !previousNotificationIds.current.has(id));
             
-            newIds.forEach(id => {
-              const notification = newNotifications.find(n => n.id === id);
-              if (notification && notification.status === 'unread') {
-                playNotificationSound();
-                showBrowserNotification(notification);
-                
-                if (notification.priority === 'urgent' || notification.priority === 'high') {
-                  toast.success(`Nueva notificación: ${notification.title}`, {
-                    duration: 5000,
-                    position: 'top-right',
-                  });
+            if (newIds.length > 0 && previousNotificationIds.current.size > 0) {
+              setNewNotificationCount(prev => prev + newIds.length);
+              
+              newIds.forEach(id => {
+                const notification = newNotifications.find(n => n.id === id);
+                if (notification && notification.status === 'unread') {
+                  // Play sound based on priority
+                  playNotificationSound(notification.priority);
+                  
+                  // Show browser notification
+                  showBrowserNotification(notification);
+                  
+                  // Show toast for high priority notifications
+                  if (notification.priority === 'urgent' || notification.priority === 'high') {
+                    const toastOptions = {
+                      duration: notification.priority === 'urgent' ? 8000 : 5000,
+                      position: 'top-right' as const,
+                      style: {
+                        background: notification.type === 'error' ? '#fef2f2' : 
+                                   notification.type === 'warning' ? '#fffbeb' :
+                                   notification.type === 'success' ? '#f0fdf4' : '#f0f4ff',
+                        border: notification.type === 'error' ? '1px solid #fecaca' : 
+                               notification.type === 'warning' ? '1px solid #fed7aa' :
+                               notification.type === 'success' ? '1px solid #bbf7d0' : '1px solid #c7d2fe',
+                        color: '#1f2937',
+                      }
+                    };
+
+                    if (notification.priority === 'urgent') {
+                      toast.error(`🚨 ${notification.title}`, toastOptions);
+                    } else {
+                      toast.success(`📢 ${notification.title}`, toastOptions);
+                    }
+                  }
                 }
-              }
-            });
-          }
+              });
+            }
 
-          previousNotificationIds.current = currentIds;
-          setAllNotifications(newNotifications);
+            previousNotificationIds.current = currentIds;
+            setAllNotifications(newNotifications);
+            setLoading(false);
+          },
+          filters
+        );
+
+        unsubscribeRef.current = unsubscribe;
+      } catch (err) {
+        if (mounted) {
+          const errorMessage = err instanceof Error ? err.message : 'Error al cargar las notificaciones';
+          setError(errorMessage);
           setLoading(false);
-        },
-        filters
-      );
-
-      unsubscribeRef.current = unsubscribe;
-    } catch (err) {
-      if (mounted) {
-        setError('Error al cargar las notificaciones');
-        setLoading(false);
-        console.error('Error subscribing to notifications:', err);
+          console.error('Error subscribing to notifications:', err);
+          
+          toast.error('Error al conectar con las notificaciones', {
+            duration: 5000,
+            position: 'top-right',
+          });
+        }
       }
-    }
+    };
+
+    setupSubscription();
 
     return () => {
       mounted = false;
@@ -178,7 +292,7 @@ export const useNotifications = () => {
     };
   }, [filters, playNotificationSound, showBrowserNotification, requestNotificationPermission]);
 
-  // Cargar estadísticas de cola
+  // Load queue stats periodically
   useEffect(() => {
     const loadQueueStats = async () => {
       try {
@@ -190,12 +304,12 @@ export const useNotifications = () => {
     };
 
     loadQueueStats();
-    const interval = setInterval(loadQueueStats, 30000); // Cada 30 segundos
+    const interval = setInterval(loadQueueStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Aplicar filtros localmente
-  useEffect(() => {
+  // Memoized filtered notifications for better performance
+  const filteredNotifications = useMemo(() => {
     let filtered = [...allNotifications];
 
     if (filters.search) {
@@ -230,11 +344,16 @@ export const useNotifications = () => {
       });
     }
 
-    setNotifications(filtered);
+    return filtered;
   }, [allNotifications, filters]);
 
-  // Calcular estadísticas
+  // Update notifications state when filtered notifications change
   useEffect(() => {
+    setNotifications(filteredNotifications);
+  }, [filteredNotifications]);
+
+  // Calculate statistics with memoization
+  const calculatedStats = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -271,19 +390,23 @@ export const useNotifications = () => {
         thisMonth: allNotifications.filter(n => new Date(n.createdAt) >= thisMonth).length,
       }
     };
-    setStats(newStats);
+    return newStats;
   }, [allNotifications]);
 
-  // Limpiar notificaciones expiradas periódicamente
+  useEffect(() => {
+    setStats(calculatedStats);
+  }, [calculatedStats]);
+
+  // Cleanup expired notifications periodically
   useEffect(() => {
     const interval = setInterval(() => {
       cleanupExpiredNotifications().catch(console.error);
-    }, 60000); // Cada minuto
+    }, 5 * 60 * 1000); // Every 5 minutes
 
     return () => clearInterval(interval);
   }, []);
 
-  // Función mejorada para crear notificación con envío externo y cola
+  // Enhanced create notification function
   const createNotification = useCallback(async (
     data: NotificationFormData & {
       sendExternal?: boolean;
@@ -296,14 +419,14 @@ export const useNotifications = () => {
     try {
       setSendingExternal(true);
       
-      // Crear la notificación en Firestore
+      // Create the notification in Firestore
       const notificationId = await createNotificationFirestore(data);
       
-      // Si se especifica envío externo
+      // If external sending is requested
       if (data.sendExternal && data.recipientIds && data.recipientIds.length > 0) {
         if (data.useQueue) {
-          // Usar sistema de colas
-          toast.loading('Agregando a cola de envío...', { id: 'queuing' });
+          // Use queue system
+          const loadingToast = toast.loading('Agregando a cola de envío...');
           
           try {
             await notificationQueueService.enqueueNotification(
@@ -317,16 +440,16 @@ export const useNotifications = () => {
               }
             );
             
-            toast.dismiss('queuing');
+            toast.dismiss(loadingToast);
             toast.success(`Notificación agregada a cola para ${data.recipientIds.length} destinatarios`);
           } catch (queueError) {
-            toast.dismiss('queuing');
+            toast.dismiss(loadingToast);
             console.error('Error queuing notification:', queueError);
             toast.error('Notificación creada pero falló al agregar a cola');
           }
         } else {
-          // Envío directo
-          toast.loading('Enviando notificaciones externas...', { id: 'sending-external' });
+          // Direct sending
+          const loadingToast = toast.loading('Enviando notificaciones externas...');
           
           try {
             const deliveryResults = await notificationService.sendNotificationToUsers(
@@ -335,7 +458,7 @@ export const useNotifications = () => {
               data
             );
             
-            toast.dismiss('sending-external');
+            toast.dismiss(loadingToast);
             
             const successMessage = [];
             if (deliveryResults.emailSent > 0) {
@@ -351,11 +474,15 @@ export const useNotifications = () => {
             if (successMessage.length > 0) {
               toast.success(`Notificación enviada: ${successMessage.join(', ')}`);
             } else {
-              toast.error('Notificación creada pero no se pudieron enviar notificaciones externas');
+              toast('Notificación creada pero no se pudieron enviar notificaciones externas', {
+                icon: '⚠️',
+                duration: 5000,
+                position: 'top-right',
+              });
             }
             
           } catch (externalError) {
-            toast.dismiss('sending-external');
+            toast.dismiss(loadingToast);
             console.error('Error sending external notifications:', externalError);
             toast.error('Notificación creada pero falló el envío externo');
           }
@@ -373,136 +500,14 @@ export const useNotifications = () => {
     }
   }, []);
 
-  // Función para crear notificación desde template
-  const createNotificationFromTemplate = useCallback(async (
-    template: NotificationTemplate,
-    variables: Record<string, string>,
-    options: {
-      sendExternal?: boolean;
-      recipientIds?: string[];
-      useQueue?: boolean;
-      scheduledFor?: Date;
-    } = {}
-  ): Promise<void> => {
-    try {
-      // Reemplazar variables en el template
-      let title = template.title;
-      let message = template.message;
-      
-      Object.entries(variables).forEach(([key, value]) => {
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        title = title.replace(regex, value);
-        message = message.replace(regex, value);
-      });
-
-      // Crear notificación con datos del template
-      await createNotification({
-        title,
-        message,
-        type: template.type,
-        priority: template.priority,
-        category: template.category,
-        tags: template.variables,
-        ...options,
-      });
-    } catch (error) {
-      console.error('Error creating notification from template:', error);
-      throw error;
-    }
-  }, [createNotification]);
-
-  // Función para obtener estadísticas de entrega
-  const getDeliveryStats = useCallback(async (notificationId: string) => {
-    try {
-      return await notificationService.getDeliveryStats(notificationId);
-    } catch (error) {
-      console.error('Error getting delivery stats:', error);
-      return null;
-    }
-  }, []);
-
-  // Función para obtener estadísticas de cola
-  const getQueueStats = useCallback(async () => {
-    try {
-      return await notificationQueueService.getQueueStats();
-    } catch (error) {
-      console.error('Error getting queue stats:', error);
-      return null;
-    }
-  }, []);
-
-  // Función para obtener salud de la cola
-  const getQueueHealth = useCallback(async () => {
-    try {
-      return await notificationQueueService.getQueueHealth();
-    } catch (error) {
-      console.error('Error getting queue health:', error);
-      return null;
-    }
-  }, []);
-
-  // Función para reintentar notificaciones fallidas
-  const retryFailedNotifications = useCallback(async () => {
-    try {
-      const retriedCount = await notificationQueueService.retryAllFailedNotifications();
-      toast.success(`${retriedCount} notificaciones reintentadas`);
-      return retriedCount;
-    } catch (error) {
-      console.error('Error retrying failed notifications:', error);
-      toast.error('Error al reintentar notificaciones');
-      throw error;
-    }
-  }, []);
-
-  // Función para limpiar notificaciones antiguas
-  const cleanupOldNotifications = useCallback(async (days: number = 30) => {
-    try {
-      const deletedCount = await notificationQueueService.cleanupOldNotifications(days);
-      toast.success(`${deletedCount} notificaciones antiguas eliminadas`);
-      return deletedCount;
-    } catch (error) {
-      console.error('Error cleaning up old notifications:', error);
-      toast.error('Error al limpiar notificaciones antiguas');
-      throw error;
-    }
-  }, []);
-
-  // Función para programar notificación
-  const scheduleNotification = useCallback(async (
-    data: NotificationFormData & {
-      recipientIds?: string[];
-    },
-    scheduledFor: Date
-  ): Promise<void> => {
-    try {
-      // Crear la notificación en Firestore
-      const notificationId = await createNotificationFirestore(data);
-      
-      // Agregar a cola programada
-      if (data.recipientIds && data.recipientIds.length > 0) {
-        await notificationQueueService.scheduleNotification(
-          notificationId,
-          data.recipientIds,
-          data,
-          scheduledFor,
-          {
-            priority: data.priority || 'medium',
-            maxAttempts: 3,
-          }
-        );
-        
-        toast.success(`Notificación programada para ${scheduledFor.toLocaleString()}`);
-      }
-    } catch (error) {
-      console.error('Error scheduling notification:', error);
-      toast.error('Error al programar la notificación');
-      throw error;
-    }
-  }, []);
-
+  // Enhanced action functions with better error handling
   const markAsRead = useCallback(async (id: string): Promise<void> => {
     try {
       await markNotificationAsRead(id);
+      // Optimistic update
+      setAllNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, status: 'read' as const, readAt: new Date() } : n)
+      );
     } catch (error) {
       console.error('Error marking as read:', error);
       toast.error('Error al marcar como leída');
@@ -513,6 +518,10 @@ export const useNotifications = () => {
   const markAsUnread = useCallback(async (id: string): Promise<void> => {
     try {
       await markNotificationAsUnread(id);
+      // Optimistic update
+      setAllNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, status: 'unread' as const, readAt: undefined } : n)
+      );
     } catch (error) {
       console.error('Error marking as unread:', error);
       toast.error('Error al marcar como no leída');
@@ -523,6 +532,10 @@ export const useNotifications = () => {
   const archiveNotification = useCallback(async (id: string): Promise<void> => {
     try {
       await archiveNotificationFirestore(id);
+      // Optimistic update
+      setAllNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, status: 'archived' as const } : n)
+      );
       toast.success('Notificación archivada');
     } catch (error) {
       console.error('Error archiving notification:', error);
@@ -534,6 +547,8 @@ export const useNotifications = () => {
   const deleteNotification = useCallback(async (id: string): Promise<void> => {
     try {
       await deleteNotificationFirestore(id);
+      // Optimistic update
+      setAllNotifications(prev => prev.filter(n => n.id !== id));
       toast.success('Notificación eliminada');
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -545,6 +560,10 @@ export const useNotifications = () => {
   const markAllAsRead = useCallback(async (): Promise<void> => {
     try {
       await markAllNotificationsAsRead();
+      // Optimistic update
+      setAllNotifications(prev => 
+        prev.map(n => n.status === 'unread' ? { ...n, status: 'read' as const, readAt: new Date() } : n)
+      );
       toast.success('Todas las notificaciones marcadas como leídas');
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -559,6 +578,22 @@ export const useNotifications = () => {
   ): Promise<void> => {
     try {
       await bulkNotificationAction(ids, action);
+      
+      // Optimistic update
+      setAllNotifications(prev => {
+        switch (action) {
+          case 'read':
+            return prev.map(n => ids.includes(n.id) ? { ...n, status: 'read' as const, readAt: new Date() } : n);
+          case 'unread':
+            return prev.map(n => ids.includes(n.id) ? { ...n, status: 'unread' as const, readAt: undefined } : n);
+          case 'archive':
+            return prev.map(n => ids.includes(n.id) ? { ...n, status: 'archived' as const } : n);
+          case 'delete':
+            return prev.filter(n => !ids.includes(n.id));
+          default:
+            return prev;
+        }
+      });
       
       const actionMessages = {
         read: `${ids.length} notificaciones marcadas como leídas`,
@@ -581,17 +616,33 @@ export const useNotifications = () => {
 
   const refreshStats = useCallback(async () => {
     try {
+      setLastRefresh(Date.now());
       const newStats = await getNotificationStats();
-      setStats({
+      setStats(prev => ({
         ...newStats,
-        recentActivity: {
-          today: 0,
-          thisWeek: 0,
-          thisMonth: 0,
-        },
-      });
+        recentActivity: prev.recentActivity, // Keep calculated recent activity
+      }));
     } catch (error) {
       console.error('Error refreshing stats:', error);
+      toast.error('Error al actualizar estadísticas');
+    }
+  }, []);
+
+  // Toggle sound setting
+  const toggleSound = useCallback(() => {
+    setSoundEnabled(prev => {
+      const newValue = !prev;
+      localStorage.setItem('notificationSoundEnabled', String(newValue));
+      toast.success(newValue ? 'Sonidos activados' : 'Sonidos desactivados');
+      return newValue;
+    });
+  }, []);
+
+  // Load sound setting from localStorage
+  useEffect(() => {
+    const savedSetting = localStorage.getItem('notificationSoundEnabled');
+    if (savedSetting !== null) {
+      setSoundEnabled(savedSetting === 'true');
     }
   }, []);
 
@@ -606,11 +657,12 @@ export const useNotifications = () => {
     newNotificationCount,
     sendingExternal,
     queueStats,
+    soundEnabled,
+    lastRefresh,
 
     // Basic Actions
     setFilters,
     createNotification,
-    createNotificationFromTemplate,
     markAsRead,
     markAsUnread,
     archiveNotification,
@@ -619,14 +671,15 @@ export const useNotifications = () => {
     bulkAction,
     clearNewNotificationCount,
     refreshStats,
+    toggleSound,
 
     // Advanced Features
-    getDeliveryStats,
-    getQueueStats,
-    getQueueHealth,
-    retryFailedNotifications,
-    cleanupOldNotifications,
-    scheduleNotification,
+    getDeliveryStats: notificationService.getDeliveryStats.bind(notificationService),
+    getQueueStats: notificationQueueService.getQueueStats.bind(notificationQueueService),
+    getQueueHealth: notificationQueueService.getQueueHealth.bind(notificationQueueService),
+    retryFailedNotifications: notificationQueueService.retryAllFailedNotifications.bind(notificationQueueService),
+    cleanupOldNotifications: notificationQueueService.cleanupOldNotifications.bind(notificationQueueService),
+    scheduleNotification: notificationQueueService.scheduleNotification.bind(notificationQueueService),
 
     // Utilities
     playNotificationSound,

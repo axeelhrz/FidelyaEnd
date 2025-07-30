@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Gift, Calendar, DollarSign, Tag, Store, Users } from 'lucide-react';
+import { X, Gift, Calendar, DollarSign, Tag, Store, Users, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useComercios } from '@/hooks/useComercios';
 import { BeneficiosService } from '@/services/beneficios.service';
@@ -21,9 +21,10 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
   onSuccess
 }) => {
   const { user } = useAuth();
-  const { comerciosVinculados, loadComercios } = useComercios();
+  const { comerciosVinculados, loadComercios, loading: comerciosLoading } = useComercios();
   
   const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const [formData, setFormData] = useState<BeneficioFormData>({
     titulo: '',
     descripcion: '',
@@ -43,17 +44,36 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
   const [selectedComercio, setSelectedComercio] = useState('');
   const [newTag, setNewTag] = useState('');
 
+  // Debug function
+  const addDebugInfo = (info: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugInfo(prev => `${prev}\n[${timestamp}] ${info}`);
+    console.log(`[CreateBeneficioModal] ${info}`);
+  };
+
   // Cargar comercios vinculados cuando se abre el modal
   useEffect(() => {
     if (isOpen && user && user.role === 'asociacion') {
-      console.log('Cargando comercios vinculados para asociación:', user.uid);
+      addDebugInfo(`Modal abierto para asociación: ${user.uid}`);
+      addDebugInfo('Cargando comercios vinculados...');
       loadComercios();
     }
   }, [isOpen, user, loadComercios]);
 
+  // Monitor comercios loading
+  useEffect(() => {
+    if (isOpen) {
+      addDebugInfo(`Comercios vinculados: ${comerciosVinculados.length}`);
+      if (comerciosVinculados.length > 0) {
+        addDebugInfo(`Comercios disponibles: ${comerciosVinculados.map(c => c.nombreComercio).join(', ')}`);
+      }
+    }
+  }, [comerciosVinculados, isOpen]);
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
+      addDebugInfo('Reseteando formulario...');
       setFormData({
         titulo: '',
         descripcion: '',
@@ -71,24 +91,33 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
       });
       setSelectedComercio('');
       setNewTag('');
+      setDebugInfo(''); // Clear debug info when modal opens
     }
   }, [isOpen, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    addDebugInfo('Iniciando proceso de creación de beneficio...');
+    
     if (!user) {
-      toast.error('Debes iniciar sesión para crear un beneficio');
+      const error = 'Debes iniciar sesión para crear un beneficio';
+      addDebugInfo(`Error: ${error}`);
+      toast.error(error);
       return;
     }
 
     if (!selectedComercio) {
-      toast.error('Selecciona un comercio para el beneficio');
+      const error = 'Selecciona un comercio para el beneficio';
+      addDebugInfo(`Error: ${error}`);
+      toast.error(error);
       return;
     }
 
     if (formData.fechaInicio >= formData.fechaFin) {
-      toast.error('La fecha de fin debe ser posterior a la fecha de inicio');
+      const error = 'La fecha de fin debe ser posterior a la fecha de inicio';
+      addDebugInfo(`Error: ${error}`);
+      toast.error(error);
       return;
     }
 
@@ -101,17 +130,26 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
         asociacionesDisponibles: user.role === 'asociacion' ? [user.uid] : formData.asociacionesDisponibles
       };
 
-      console.log('Creando beneficio con datos:', updatedFormData);
-      console.log('Comercio seleccionado:', selectedComercio);
-      console.log('Rol de usuario:', user.role);
+      addDebugInfo(`Datos del beneficio: ${JSON.stringify({
+        titulo: updatedFormData.titulo,
+        comercioId: selectedComercio,
+        tipo: updatedFormData.tipo,
+        descuento: updatedFormData.descuento,
+        userRole: user.role,
+        userId: user.uid
+      })}`);
 
       await BeneficiosService.crearBeneficio(updatedFormData, user.uid, user.role);
+      
+      addDebugInfo('✅ Beneficio creado exitosamente');
       toast.success('Beneficio creado exitosamente');
       onSuccess();
       onClose();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      addDebugInfo(`❌ Error al crear beneficio: ${errorMessage}`);
       console.error('Error creating beneficio:', error);
-      toast.error('Error al crear el beneficio');
+      toast.error('Error al crear el beneficio: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -124,6 +162,7 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
         tags: [...(prev.tags || []), newTag.trim()]
       }));
       setNewTag('');
+      addDebugInfo(`Tag agregado: ${newTag.trim()}`);
     }
   };
 
@@ -132,6 +171,7 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
       ...prev,
       tags: prev.tags?.filter(tag => tag !== tagToRemove) || []
     }));
+    addDebugInfo(`Tag removido: ${tagToRemove}`);
   };
 
   const formatDateForInput = (date: Date) => {
@@ -181,8 +221,48 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
               </button>
             </div>
 
+            {/* Debug Info (solo en desarrollo) */}
+            {process.env.NODE_ENV === 'development' && debugInfo && (
+              <div className="p-4 bg-gray-50 border-b border-gray-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900 mb-1">Debug Info</h4>
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                      {debugInfo}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Body */}
             <div className="p-6 space-y-6">
+              {/* Status de comercios */}
+              {comerciosLoading && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-blue-700 text-sm">Cargando comercios vinculados...</span>
+                  </div>
+                </div>
+              )}
+
+              {!comerciosLoading && comerciosVinculados.length === 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <div>
+                      <h4 className="text-yellow-800 font-medium">No hay comercios vinculados</h4>
+                      <p className="text-yellow-700 text-sm mt-1">
+                        Debes vincular al menos un comercio antes de crear beneficios. 
+                        Ve a la sección de Comercios para vincular comercios a tu asociación.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Información básica */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="lg:col-span-2">
@@ -219,10 +299,16 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
                   <select
                     required
                     value={selectedComercio}
-                    onChange={(e) => setSelectedComercio(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedComercio(e.target.value);
+                      addDebugInfo(`Comercio seleccionado: ${e.target.value}`);
+                    }}
                     className="form-select"
+                    disabled={comerciosLoading || comerciosVinculados.length === 0}
                   >
-                    <option value="">Seleccionar comercio</option>
+                    <option value="">
+                      {comerciosLoading ? 'Cargando comercios...' : 'Seleccionar comercio'}
+                    </option>
                     {comerciosVinculados.length > 0 ? (
                       comerciosVinculados.map(comercio => (
                         <option key={comercio.id} value={comercio.id}>
@@ -230,10 +316,12 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
                         </option>
                       ))
                     ) : (
-                      <option value="" disabled>No hay comercios disponibles</option>
+                      !comerciosLoading && (
+                        <option value="" disabled>No hay comercios disponibles</option>
+                      )
                     )}
                   </select>
-                  {comerciosVinculados.length === 0 && (
+                  {!comerciosLoading && comerciosVinculados.length === 0 && (
                     <p className="text-xs text-red-500 mt-1">
                       No hay comercios vinculados. Debes vincular comercios antes de crear beneficios.
                     </p>
@@ -482,7 +570,7 @@ export const CreateBeneficioModal: React.FC<CreateBeneficioModalProps> = ({
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={loading}
+                disabled={loading || comerciosVinculados.length === 0}
               >
                 {loading ? (
                   <div className="flex items-center gap-2">
